@@ -352,4 +352,17 @@ function onKey(event) {
   else next();
 }
 
+/**
+ * Offline support, but never on the file:// or dev path where a stale cache
+ * would just be confusing.
+ */
+function registerServiceWorker() {
+  const secure = location.protocol === 'https:' || location.hostname === 'localhost';
+  if (!secure || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').catch(() => {
+    /* offline support is a bonus, not a requirement */
+  });
+}
+
 init();
+registerServiceWorker();

@@ -8,7 +8,7 @@ and so on.
 No build step, no dependencies, no backend: plain ES modules and the Web Audio
 API.
 
-**Current state — M6.** Six levels: plain triads in C, then transposition and a
+**Current state — M7, all milestones landed.** Six levels: plain triads in C, then transposition and a
 rhythm question, then voice-led inversions, sevenths and bass/top-voice
 questions, and finally a melody over the progression to write down too. The
 review plays your own answer back — chords and melody — against what was
@@ -56,11 +56,32 @@ minor, `vii°` diminished. The parser is forgiving about the rest — `viio`,
 and separators can be spaces, commas, bars or dashes. The per-slot pickers write
 into the same field, so you can use either.
 
+## The levels
+
+| Level | What it asks |
+|---|---|
+| 1 | Three chords in C major, drawn from I IV V |
+| 2 | Four chords, adding ii and vi |
+| 3 | Any major key, all seven diatonic triads, and which rhythm it was |
+| 4 | Sevenths and inversions, and which note was in the bass |
+| 5 | Longer, syncopated, and which note was on top |
+| 6 | All of it, with a melody over the progression to write down too |
+
+What you miss steers what comes next: accuracy is tracked per chord, per
+transition between chords, per inversion and per rhythm, and generation leans
+toward the weak ones. Open **Progress** at the bottom of the page to see where
+you stand, or to export it as JSON.
+
 ## Deploying
 
 Static files, so GitHub Pages serves the repository root as-is: Settings →
-Pages, source = branch, folder = `/`. All paths in `index.html` are relative, so
-the site works from a project subdirectory.
+Pages, source = GitHub Actions (the workflow in `.github/workflows/pages.yml`
+runs the tests and deploys on every push to `main`), or source = branch,
+folder = `/` to skip the workflow entirely. All paths in `index.html` are
+relative, so the site works from a project subdirectory.
+
+Once loaded over HTTPS or localhost, a service worker caches the app shell, so
+it keeps working with no network at all.
 
 ## Layout
 
@@ -73,8 +94,12 @@ src/
   rhythm.js      rhythm pattern library
   generator.js   exercise generation from a transition table
   grading.js     exercise + answer -> result tree
+  voicing.js     voice leading: inversions and octaves by least movement
+  melody.js      a singable line over the chords
+  stats.js       per-concept accuracy, drill weights, export/import
   audio/         engine (voices), scheduler (lookahead), player (exercise -> sound)
-  ui/            answer sheet, review
+  ui/            answer sheet, rhythm picker, melody input, review, stats panel
+sw.js            offline cache of the app shell
 test/            node --test, no dependencies
 ```
 

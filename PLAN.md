@@ -10,6 +10,11 @@ Stack: **vanilla JS (ES modules), no build step**, Web Audio oscillators for sou
 `localStorage` for stats and weighted drilling. Deployable as static files to
 GitHub Pages.
 
+**Status: M0–M7 shipped.** All six levels, the rhythm question, voice-led
+inversions and sevenths, melody dictation, per-concept stats with weighted
+drilling, and offline support. Where the build diverged from this plan, the
+plan has been corrected below and the reason noted.
+
 ---
 
 ## 1. The exercise loop
@@ -139,6 +144,9 @@ exercises sound like music, which is what makes them learnable.
   previous chord, keeping voices inside singable ranges and avoiding voice
   crossing. Cheap to implement (score a handful of candidate voicings, pick the
   best) and it makes inversion questions meaningful rather than arbitrary.
+  Movement alone is not enough, though: the search also pays a charge per
+  inversion, or six-four chords turn up wherever they save a semitone and the
+  ear learns a prior that is wrong. The outer chords stay in root position.
 - **Rhythm.** A pattern from the library assigns `startBeat`/`durationBeats` to
   the chords. Patterns are ids like `q-q-h` (quarter, quarter, half) so both the
   generator and the rhythm question reference the same objects.
@@ -220,12 +228,18 @@ Presets that switch on generator options and answer-sheet sections together:
 
 | Level | Key | Chords | Pool | Voicing | Rhythm | Extras |
 |---|---|---|---|---|---|---|
-| 1 | C major | 3 | I IV V | block, root position | all quarters | — |
-| 2 | C major | 4 | + vi ii | root position | 2 patterns | — |
-| 3 | any major | 4 | diatonic triads | root position | 4 patterns | rhythm question |
-| 4 | any major | 4 | + V7 | inversions | 6 patterns | inversions, bass |
-| 5 | major/minor | 4–6 | + secondary dominants, borrowed | inversions | full library | + top voice |
-| 6 | any | 4–8 | full | inversions | full | + melody dictation |
+| 1 | C major | 3 | I IV V | root position | even only | — |
+| 2 | C major | 4 | + vi ii | root position | even only | — |
+| 3 | any major | 4 | diatonic triads | root position | + uneven | rhythm question |
+| 4 | any major | 4 | + V7, ii7 | inversions | + uneven | inversions, bass |
+| 5 | any major | 5 | + V7, ii7 | inversions | + syncopated | + top voice |
+| 6 | any major | 4–6 | + V7, ii7 | inversions | + syncopated | + melody dictation |
+
+Two departures from the first draft of this table. Minor keys and borrowed
+chords are not in any level yet: the theory module handles them, but no level
+uses them, and adding a mode is a bigger change to the ear than to the code.
+And a chord's register is chosen by the voice leader rather than fixed, so
+"block" stopped being a meaningful column.
 
 Levels are presets over the same settings object, so any individual switch stays
 user-overridable.
@@ -277,6 +291,12 @@ Each milestone ends with something playable in the browser.
   submit, n = next), mobile layout, GitHub Pages deploy, offline via a small
   service worker.
 
+One thing this list did not anticipate: **the answer sheet was leaking the
+question.** A row of pickers as long as the exercise says how many chords there
+were, and a beatmap drawn one box per chord, sized by duration, says where they
+changed. Both were fixed in M3 — pickers grow with what you type, and while you
+are answering the screen shows only a playbar of beats.
+
 M0–M2 is the minimum that teaches anything. M3–M5 are what makes it *this* app
 rather than another interval quiz.
 
@@ -284,16 +304,19 @@ rather than another interval quiz.
 
 ## 11. Open questions
 
-1. **Rhythm input.** v1 is multiple choice, which is much easier to build and to
-   grade — but it leaks information (you can rule patterns out by elimination).
-   Tap-to-enter is truer training. Plan: multiple choice in M3, tapping as an
-   upgrade, with the answer stored the same way either way.
-2. **Melody entry.** Text degrees are fastest for trained users; an on-screen
-   keyboard is far more approachable. Both are planned, but if one has to go
-   first it should be the keyboard.
-3. **Melody rhythm.** M5 grades melody *pitches* only. Grading melodic rhythm as
-   well roughly doubles the entry UI's complexity — deferred until pitch
-   dictation is comfortable.
-4. **Transposition credit.** Should `I V vi IV` answered a fourth off count as a
-   near miss with partial credit, or plain wrong? Currently: reported as a near
-   miss, scored as wrong.
+1. **Rhythm input — still open.** Multiple choice shipped in M3. Two ways it
+   could be gamed were closed on the way (distractors come from the excerpt's
+   own tier, and a pattern is only asked about when it has enough siblings to
+   fill a choice list), but elimination is inherent to the form. Tap-to-enter
+   remains the truer exercise, and the answer is stored the same way either way.
+2. **Melody entry — settled.** Both shipped: a text field with a keyboard of
+   scale degrees beside it, each key labelled with the note it is in this key.
+3. **Melody rhythm — still deferred.** M5 grades pitches only. A line heard
+   correctly but written a note early or late is named as that rather than
+   scored as eight wrong notes, which covers most of the value without the
+   entry UI a full rhythmic melody answer would need.
+4. **Transposition credit — settled as planned.** Reported as a near miss,
+   scored as wrong.
+5. **Modes.** Everything is major. `theory.js` has the minor scale and its
+   degree qualities, and the generator takes a mode, but no level asks for one
+   and the transition table is major-shaped. That is the next real feature.
