@@ -1,0 +1,12 @@
+{
+  "name": "web-ear-trainer",
+  "version": "0.1.0",
+  "description": "Chord progression dictation ear trainer. Vanilla ES modules, no build step.",
+  "type": "module",
+  "private": true,
+  "license": "GPL-3.0",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "python3 -m http.server 8000"
+  }
+}
