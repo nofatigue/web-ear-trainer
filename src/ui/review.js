@@ -67,7 +67,7 @@ export function renderReview(root, result, exercise, answerPlay, handlers = {}) 
     result.slots.forEach((slot, i) => {
       const played = row.key === 'played';
       const chord = played ? exercise.chords[i] : answerPlay.chords[i];
-      const text = played ? (slot.expected || '·') : (slot.actual || '·');
+      const text = played ? (slot.expectedLabel || slot.expected || '·') : (slot.actual || '·');
       const cell = chip(text, {
         role: row.key,
         status: played ? '' : slot.status,
@@ -115,15 +115,23 @@ export function renderReview(root, result, exercise, answerPlay, handlers = {}) 
 
   const notes = document.createElement('div');
   notes.className = 'review-reasons';
-  result.slots.forEach((slot, i) => {
-    if (!slot.reason) return;
+
+  const reasonRow = (index, status, label, text) => {
     const row = document.createElement('div');
-    row.className = `review-reason is-${slot.status}`;
-    row.innerHTML = `<span class="review-slot-n">${i + 1}</span>
-      <span class="review-status">${STATUS_LABEL[slot.status]}</span>
+    row.className = `review-reason is-${status}`;
+    row.innerHTML = `<span class="review-slot-n">${index + 1}</span>
+      <span class="review-status"></span>
       <span class="review-why"></span>`;
-    row.querySelector('.review-why').textContent = slot.reason;
+    row.querySelector('.review-status').textContent = label;
+    row.querySelector('.review-why').textContent = text;
     notes.append(row);
+  };
+
+  result.slots.forEach((slot, i) => {
+    if (slot.reason) reasonRow(i, slot.status, STATUS_LABEL[slot.status], slot.reason);
+    for (const [field, detail] of Object.entries(slot.details || {})) {
+      if (detail && !detail.correct) reasonRow(i, 'wrong', field === 'top' ? 'top voice' : field, detail.reason);
+    }
   });
   for (const note of result.notes) {
     const row = document.createElement('div');

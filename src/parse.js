@@ -4,7 +4,7 @@
 // spellings (b/♭, #/♯), quality spellings (o/°/dim, +/aug) and figured-bass
 // shorthand all normalise to the same thing. Pure: no DOM.
 
-import { noteNameToPc } from './theory.js';
+import { noteNameToPc, SCALES } from './theory.js';
 
 const ROMAN_TO_INDEX = { i: 0, ii: 1, iii: 2, iv: 3, v: 4, vi: 5, vii: 6 };
 
@@ -56,10 +56,12 @@ export function parseChordToken(raw) {
   // Figured bass / seventh.
   let inversion = 0;
   let hasSeventh = false;
+  let hasFigure = false;
   for (const [fig, inv, seventh] of FIGURES) {
     if (suffix.startsWith(fig)) {
       inversion = inv;
       hasSeventh = seventh;
+      hasFigure = true;
       suffix = suffix.slice(fig.length);
       break;
     }
@@ -80,7 +82,9 @@ export function parseChordToken(raw) {
     quality = 'dim'; // "ø" without a figure is loose talk for a diminished sound
   }
 
-  return { degree, alter, quality, inversion, text };
+  // A plain "V" says nothing either way about the inversion, so the field is
+  // null rather than 0: it is what the user claimed, not a default.
+  return { degree, alter, quality, inversion: hasFigure ? inversion : null, hasFigure, text };
 }
 
 /**
@@ -119,4 +123,22 @@ export function parseMelody(input) {
     }
   }
   return { notes, errors };
+}
+
+/**
+ * One note, written either way: a note name ("Bb") or a scale degree ("3").
+ * Returns a pitch class, or null for an empty field.
+ */
+export function parsePitch(text, key) {
+  const token = String(text ?? '').trim();
+  if (!token) return null;
+  if (/^[1-7]$/.test(token)) {
+    const step = SCALES[key.mode][Number(token) - 1];
+    return (noteNameToPc(key.tonic) + step) % 12;
+  }
+  try {
+    return noteNameToPc(token);
+  } catch {
+    return null;
+  }
 }

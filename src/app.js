@@ -76,7 +76,7 @@ function renderLevels() {
   }
   const locked = document.createElement('p');
   locked.className = 'level-locked';
-  locked.textContent = 'Levels 4–6 (inversions, sevenths, melody) unlock as those milestones land.';
+  locked.textContent = 'Level 6 — melody dictation — arrives with M5.';
   el.levels.append(locked);
   syncLevels();
 }
@@ -117,7 +117,8 @@ function next() {
   el.review.hidden = true;
   el.review.innerHTML = '';
   sheet.reset({
-    mode: state.exercise.key.mode,
+    key: state.exercise.key,
+    asks: state.exercise.asks,
     rhythmChoices: state.exercise.rhythmChoices,
     beatsPerBar: state.exercise.meter.beats,
   });
@@ -241,7 +242,7 @@ function renderBeatmap() {
     box.className = 'chord-box';
     box.style.flexGrow = String(chord.durationBeats);
     box.innerHTML = `<span class="chord-n">${i + 1}</span>
-      <span class="chord-value">${chord.roman}</span>
+      <span class="chord-value">${chord.label}</span>
       <span class="chord-beats">${chord.durationBeats === 1 ? '1 beat' : `${chord.durationBeats} beats`}</span>`;
     el.beatmap.append(box);
   });

@@ -23,6 +23,12 @@ test('quality markers are spelled several ways', () => {
   assert.equal(at('Vaug').quality, 'aug');
 });
 
+test('a numeral with no figure claims nothing about the inversion', () => {
+  assert.equal(at('I').inversion, null);
+  assert.equal(at('vi').inversion, null);
+  assert.equal(at('V7').inversion, 0, 'but a seventh chord figure does say root position');
+});
+
 test('sevenths and figured bass become quality plus inversion', () => {
   assert.deepEqual(
     (({ degree, quality, inversion }) => ({ degree, quality, inversion }))(at('V7')),

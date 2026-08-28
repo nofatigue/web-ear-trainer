@@ -145,3 +145,62 @@ test('answering only the rhythm still counts as an attempt', () => {
   assert.equal(result.possible, 1);
   assert.equal(result.score, 1);
 });
+
+// --- voicing detail (M4) ---
+
+const asking = (romans, asks) => {
+  const exercise = { ...exerciseOf(romans), asks };
+  // Voice the second chord in first inversion so there is something to hear.
+  const chord = exercise.chords[1];
+  const [root, third, fifth] = chord.pitches.slice(1);
+  chord.inversion = 1;
+  chord.pitches = [third - 12, third, fifth, root + 12];
+  return exercise;
+};
+
+test('an inversion answered right is worth half a point', () => {
+  const exercise = asking(['I', 'IV', 'V', 'I'], { inversions: true });
+  const chords = parseProgression('I IV6 V I').chords;
+  const result = gradeExercise(exercise, { chords });
+  assert.equal(result.slots[1].details.inversion.correct, true);
+  assert.equal(result.slots[1].earned, 2.5);
+  assert.equal(result.slots[1].possible, 2.5);
+});
+
+test('an inversion answered wrong names the note in the bass', () => {
+  const exercise = asking(['I', 'IV', 'V', 'I'], { inversions: true });
+  const result = gradeExercise(exercise, { chords: parseProgression('I IV64 V I').chords });
+  const detail = result.slots[1].details.inversion;
+  assert.equal(detail.correct, false);
+  assert.match(detail.reason, /IV6 — the third in the bass/);
+});
+
+test('a plain numeral says nothing about the inversion and is not marked', () => {
+  const exercise = asking(['I', 'IV', 'V', 'I'], { inversions: true });
+  const result = gradeExercise(exercise, { chords: parseProgression('I IV V I').chords });
+  assert.equal(result.slots[1].details.inversion, null, 'unanswered, not wrong');
+  assert.equal(result.possible, 8, 'the voicing questions stay out of the denominator');
+  assert.ok(result.perfect);
+});
+
+test('bass and top notes are graded by pitch class, however they were written', () => {
+  const exercise = { ...exerciseOf(['I', 'IV', 'V', 'I']), asks: { bass: true, top: true } };
+  const chords = parseProgression('I IV V I').chords.map((chord, i) => ({
+    ...chord,
+    bassPc: exercise.chords[i].pitches[0] % 12,
+    topPc: i === 0 ? exercise.chords[0].pitches.at(-1) % 12 : 6, // one deliberate miss
+  }));
+  const result = gradeExercise(exercise, { chords });
+  assert.ok(result.slots.every((s) => s.details.bass.correct));
+  assert.equal(result.slots[0].details.top.correct, true);
+  assert.equal(result.slots[1].details.top.correct, false);
+  assert.match(result.slots[1].details.top.reason, /top voice was/);
+});
+
+test('voicing questions the level does not ask are never graded', () => {
+  const exercise = { ...exerciseOf(['I', 'IV']), asks: {} };
+  const chords = parseProgression('I IV').chords.map((c) => ({ ...c, bassPc: 3, topPc: 3 }));
+  const result = gradeExercise(exercise, { chords });
+  assert.deepEqual(result.slots[0].details, {});
+  assert.equal(result.possible, 4);
+});

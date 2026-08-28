@@ -5,8 +5,8 @@
 // a picker rewrites its own token and everything re-renders from that, so the
 // two can never drift apart.
 
-import { parseProgression } from '../parse.js';
-import { DEGREE_QUALITIES, formatRoman } from '../theory.js';
+import { parseProgression, parsePitch } from '../parse.js';
+import { DEGREE_QUALITIES, formatRoman, chordLabel } from '../theory.js';
 import { createRhythmPicker } from './rhythm-picker.js';
 
 function degreeOptions(mode) {
@@ -22,6 +22,7 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     <input id="progression" class="sheet-input" type="text" autocomplete="off" spellcheck="false"
            placeholder="I IV V I" aria-describedby="sheet-errors">
     <div class="slots" id="slots"></div>
+    <div class="section" id="detail-section"></div>
     <p class="sheet-errors" id="sheet-errors" role="status"></p>
     <button class="btn btn-primary" id="btn-submit" type="button">Check answer <kbd>enter</kbd></button>
   `;
@@ -30,12 +31,16 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
   const rhythm = createRhythmPicker(rhythmRoot, { onChange: () => update() });
   const input = root.querySelector('#progression');
   const slotsEl = root.querySelector('#slots');
+  const detailEl = root.querySelector('#detail-section');
   const errorsEl = root.querySelector('#sheet-errors');
   const submitEl = root.querySelector('#btn-submit');
 
   const MIN_SLOTS = 3;
   const MAX_SLOTS = 8;
   let mode = 'major';
+  let key = { tonic: 'C', mode: 'major' };
+  let asks = {};
+  let details = [];
   let enabled = true;
 
   function tokens() {
@@ -98,12 +103,115 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     }
   }
 
+  const INVERSIONS = [
+    ['', '–'],
+    ['0', 'root'],
+    ['1', '6 · third in bass'],
+    ['2', '6-4 · fifth in bass'],
+    ['3', '4-2 · seventh in bass'],
+  ];
+
+  /**
+   * The voicing questions, one row per chord. The inversion picker writes its
+   * figure back into the progression text — "V" becomes "V65" — so a chord's
+   * identity lives in exactly one place however you chose to enter it.
+   */
+  function renderDetails() {
+    detailEl.innerHTML = '';
+    if (!asks.inversions && !asks.bass && !asks.top) return;
+
+    const label = document.createElement('span');
+    label.className = 'sheet-label';
+    label.textContent = 'Voicing';
+    detailEl.append(label);
+
+    const hint = document.createElement('p');
+    hint.className = 'sheet-hint';
+    hint.textContent = 'Optional — every row you leave alone is left out of the score. Notes can be names (Bb) or scale degrees (3).';
+    detailEl.append(hint);
+
+    const table = document.createElement('div');
+    table.className = 'details';
+
+    const head = document.createElement('div');
+    head.className = 'detail-row is-head';
+    head.innerHTML = `<span></span>${asks.inversions ? '<span>Inversion</span>' : ''}`
+      + `${asks.bass ? '<span>Bass</span>' : ''}${asks.top ? '<span>Top voice</span>' : ''}`;
+    table.append(head);
+    table.style.setProperty('--cols', String(1 + [asks.inversions, asks.bass, asks.top].filter(Boolean).length));
+
+    const chords = parsed().chords;
+    for (let i = 0; i < slotCount(); i++) {
+      const row = document.createElement('div');
+      row.className = 'detail-row';
+      const n = document.createElement('span');
+      n.className = 'slot-n';
+      n.textContent = i + 1;
+      row.append(n);
+
+      if (asks.inversions) {
+        const select = document.createElement('select');
+        select.className = 'slot-select';
+        select.setAttribute('aria-label', `Inversion of chord ${i + 1}`);
+        select.disabled = !enabled;
+        for (const [value, text] of INVERSIONS) select.add(new Option(text, value));
+        const current = details[i] && details[i].inversion;
+        select.value = current === null || current === undefined ? '' : String(current);
+        select.addEventListener('change', () => {
+          setDetail(i, 'inversion', select.value === '' ? null : Number(select.value));
+          writeFigure(i);
+        });
+        row.append(select);
+      }
+
+      for (const field of ['bass', 'top']) {
+        if (!asks[field]) continue;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'detail-input';
+        input.autocomplete = 'off';
+        input.placeholder = field === 'bass' ? 'e.g. G' : 'e.g. 3';
+        input.setAttribute('aria-label', `${field === 'bass' ? 'Bass note' : 'Top voice'} of chord ${i + 1}`);
+        input.value = (details[i] && details[i][field]) || '';
+        input.disabled = !enabled;
+        input.addEventListener('input', () => setDetail(i, field, input.value));
+        row.append(input);
+      }
+
+      row.classList.toggle('is-unwritten', !chords[i]);
+      table.append(row);
+    }
+    detailEl.append(table);
+  }
+
+  function setDetail(index, field, value) {
+    while (details.length <= index) details.push({ inversion: null, bass: '', top: '' });
+    details[index][field] = value;
+  }
+
+  /** Push an inversion chosen in the table back into the progression text. */
+  function writeFigure(index) {
+    const chords = parsed().chords;
+    const chord = chords[index];
+    if (!chord) { update(); return; }
+    const inversion = details[index].inversion;
+    const next = tokens();
+    next[index] = chordLabel(chord.degree, chord.quality, inversion || 0);
+    input.value = next.join(' ');
+    update();
+  }
+
   function update() {
     const { chords, errors } = parsed();
     errorsEl.textContent = errors.length ? errors[0] : '';
     errorsEl.classList.toggle('visible', errors.length > 0);
     submitEl.disabled = !enabled || chords.length === 0;
+    // A figure typed into the text is an answer about the inversion too.
+    chords.forEach((chord, i) => {
+      if (chord.hasFigure) setDetail(i, 'inversion', chord.inversion);
+    });
     renderSlots();
+    renderDetails();
     if (onChange) onChange(chords);
   }
 
@@ -118,13 +226,23 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
 
   function getAnswer() {
     const { chords } = parsed();
-    return { chords, rhythmPatternId: rhythm.getValue(), text: input.value.trim() };
+    const answered = chords.map((chord, i) => {
+      const detail = details[i] || {};
+      return {
+        ...chord,
+        inversion: chord.hasFigure ? chord.inversion : (detail.inversion ?? null),
+        bassPc: asks.bass ? parsePitch(detail.bass, key) : null,
+        topPc: asks.top ? parsePitch(detail.top, key) : null,
+      };
+    });
+    return { chords: answered, rhythmPatternId: rhythm.getValue(), text: input.value.trim() };
   }
 
   function setEnabled(value) {
     enabled = value;
     rhythm.setEnabled(value);
     input.disabled = !value;
+    for (const field of detailEl.querySelectorAll('select, input')) field.disabled = !value;
     submitEl.disabled = !value || parsed().chords.length === 0;
     // Once an answer is in, checking it again is meaningless — the next move
     // belongs to the review below.
@@ -132,8 +250,13 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     renderSlots();
   }
 
-  function reset({ mode: m = mode, rhythmChoices = null, beatsPerBar = 4 } = {}) {
-    mode = m;
+  function reset({
+    key: k = key, rhythmChoices = null, beatsPerBar = 4, asks: a = {},
+  } = {}) {
+    key = k;
+    mode = k.mode;
+    asks = a;
+    details = [];
     rhythm.reset(rhythmChoices, { beatsPerBar });
     input.value = '';
     errorsEl.textContent = '';

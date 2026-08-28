@@ -5,24 +5,45 @@
 // progression in the wrong key, and so on. Review and (later) stats both read
 // this same structure. Pure: no DOM.
 
-import { formatRoman, QUALITY_LABELS, ROMAN } from './theory.js';
+import { formatRoman, chordLabel, pcToName, QUALITY_LABELS, ROMAN } from './theory.js';
 
 const DEGREE_POINT = 1;
 const QUALITY_POINT = 1;
 const RHYTHM_POINT = 1;
+// The voicing details are worth less than the chord itself: getting the bass
+// note of a chord you misheard entirely is not half an answer.
+const DETAIL_POINT = 0.5;
+
+const BASS_ROLE = ['root', 'third', 'fifth', 'seventh'];
 
 function describe(chord) {
   return chord ? formatRoman(chord.degree, chord.quality) : null;
 }
 
-function gradeSlot(expected, given, index) {
+/** Grade one of the voicing details hung off a chord slot. */
+function gradeDetail(expectedValue, givenValue, describeIt) {
+  if (givenValue === null || givenValue === undefined) return null;
+  const correct = givenValue === expectedValue;
+  return {
+    expected: expectedValue,
+    actual: givenValue,
+    correct,
+    earned: correct ? DETAIL_POINT : 0,
+    possible: DETAIL_POINT,
+    reason: correct ? null : describeIt(expectedValue),
+  };
+}
+
+function gradeSlot(expected, given, index, { asks = {}, flats = false } = {}) {
   const slot = {
     index,
     expected: describe(expected),
+    expectedLabel: expected ? chordLabel(expected.degree, expected.quality, expected.inversion) : null,
     expectedQuality: expected ? expected.quality : null,
     actual: given ? (given.text || describe(given)) : null,
     earned: 0,
     possible: DEGREE_POINT + QUALITY_POINT,
+    details: {},
   };
 
   if (!expected) {
@@ -37,14 +58,49 @@ function gradeSlot(expected, given, index) {
   const degreeOk = given.degree === expected.degree && (given.alter || 0) === 0;
   const qualityOk = given.quality === expected.quality;
 
+  // Voicing detail, each part optional and graded on its own.
+  const details = {};
+  if (asks.inversions) {
+    details.inversion = gradeDetail(
+      expected.inversion,
+      given.inversion ?? null,
+      (value) => `It was ${chordLabel(expected.degree, expected.quality, value)} — the `
+        + `${BASS_ROLE[value] || 'root'} in the bass.`,
+    );
+  }
+  if (asks.bass) {
+    details.bass = gradeDetail(
+      expected.pitches[0] % 12,
+      given.bassPc ?? null,
+      (value) => `The bass note was ${pcToName(value, { flats })}.`,
+    );
+  }
+  if (asks.top) {
+    details.top = gradeDetail(
+      expected.pitches[expected.pitches.length - 1] % 12,
+      given.topPc ?? null,
+      (value) => `The top voice was ${pcToName(value, { flats })}.`,
+    );
+  }
+
+  const extra = Object.values(details).filter(Boolean);
+  slot.details = details;
+  slot.earned += extra.reduce((sum, d) => sum + d.earned, 0);
+  slot.possible += extra.reduce((sum, d) => sum + d.possible, 0);
+
   if (degreeOk && qualityOk) {
-    return { ...slot, status: 'correct', earned: slot.possible, reason: null };
+    return {
+      ...slot,
+      status: 'correct',
+      earned: slot.earned + DEGREE_POINT + QUALITY_POINT,
+      reason: null,
+    };
   }
   if (degreeOk) {
     return {
       ...slot,
       status: 'near',
-      earned: DEGREE_POINT,
+      earned: slot.earned + DEGREE_POINT,
       reason: `Right root, wrong quality — that ${ROMAN[expected.degree]} was ${QUALITY_LABELS[expected.quality]}.`,
     };
   }
@@ -52,7 +108,7 @@ function gradeSlot(expected, given, index) {
     return {
       ...slot,
       status: 'wrong',
-      earned: QUALITY_POINT,
+      earned: slot.earned + QUALITY_POINT,
       reason: `Right quality, wrong root — it was ${slot.expected}.`,
     };
   }
@@ -101,7 +157,8 @@ export function gradeExercise(exercise, answer) {
   const slots = [];
   if (attemptedProgression) {
     const n = Math.max(expected.length, given.length);
-    for (let i = 0; i < n; i++) slots.push(gradeSlot(expected[i], given[i], i));
+    const context = { asks: exercise.asks || {}, flats: exercise.flats };
+    for (let i = 0; i < n; i++) slots.push(gradeSlot(expected[i], given[i], i, context));
   }
 
   const notes = [];

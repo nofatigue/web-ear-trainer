@@ -129,3 +129,15 @@ export function inversionFigure(inversion, quality) {
   if (seventh) return ['7', '65', '43', '42'][inversion] || '7';
   return ['', '6', '64'][inversion] || '';
 }
+
+/**
+ * How a chord is written: roman numeral plus figured bass, the way it would
+ * appear under a stave — "V65", not a "V7" with a 65 stuck on the end.
+ */
+export function chordLabel(degreeIndex, quality, inversion = 0) {
+  const roman = formatRoman(degreeIndex, quality);
+  const seventh = CHORD_INTERVALS[quality].length === 4;
+  if (!seventh) return roman + (['', '6', '64'][inversion] || '');
+  if (inversion === 0) return roman;
+  return roman.replace(/7$/, ['', '65', '43', '42'][inversion] || '7');
+}

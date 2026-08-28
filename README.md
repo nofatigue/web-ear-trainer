@@ -8,9 +8,10 @@ and so on.
 No build step, no dependencies, no backend: plain ES modules and the Web Audio
 API.
 
-**Current state — M3.** Progression dictation at levels 1–3, with a review that
-plays your own answer back against what was actually played, and a rhythm
-question at level 3. Rhythm, inversions
+**Current state — M4.** Progression dictation at levels 1–5: a rhythm question
+from level 3, voice-led inversions, sevenths and bass/top-voice questions from
+level 4, and a review that plays your own answer back against what was actually
+played. Rhythm, inversions
 and melody dictation arrive in M3–M5; see [PLAN.md](PLAN.md) for the full design
 and milestones.
 

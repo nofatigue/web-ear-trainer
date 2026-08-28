@@ -324,6 +324,36 @@ main { display: flex; flex-direction: column; gap: 1.75rem; }
 
 .sheet .btn { align-self: flex-start; }
 
+/* The voicing questions: one row per chord. */
+
+.details { display: flex; flex-direction: column; gap: 0.25rem; max-width: 34rem; }
+
+.detail-row {
+  display: grid;
+  grid-template-columns: 1.2rem repeat(calc(var(--cols) - 1), minmax(0, 1fr));
+  gap: 0.4rem;
+  align-items: center;
+}
+.detail-row.is-head span {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.detail-row.is-unwritten { opacity: 0.55; }
+
+.detail-input {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.4rem;
+  min-width: 0;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+
 .sheet-errors { margin: 0; min-height: 1.1rem; font-size: 0.78rem; color: var(--rust); opacity: 0; }
 .sheet-errors.visible { opacity: 1; }
 

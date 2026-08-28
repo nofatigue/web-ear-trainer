@@ -117,7 +117,9 @@ test('a pool with no cadence available still yields a progression', () => {
 test('an answer is voiced exactly as the real thing would have been', async () => {
   const { voiceChord, exerciseFromAnswer } = await import('../src/generator.js');
   const exercise = generateExercise(levelSettings(2), { rng: seeded(3) });
-  const truth = exercise.chords.map((c) => ({ degree: c.degree, quality: c.quality }));
+  const truth = exercise.chords.map((c) => ({
+    degree: c.degree, quality: c.quality, inversion: c.inversion,
+  }));
   const echo = exerciseFromAnswer(exercise, truth);
   assert.deepEqual(
     echo.chords.map((c) => c.pitches),
@@ -129,6 +131,22 @@ test('an answer is voiced exactly as the real thing would have been', async () =
     exercise.chords.map((c) => [c.startBeat, c.durationBeats]),
   );
   assert.equal(voiceChord({ tonic: 'C', mode: 'major' }, { degree: 0, quality: 'maj' }).pitches[0], 36);
+});
+
+test('an answer that leaves the inversion out is played in root position', async () => {
+  const { exerciseFromAnswer } = await import('../src/generator.js');
+  const exercise = generateExercise(levelSettings(4), { rng: seeded(77) });
+  const answer = exercise.chords.map((c) => ({ degree: c.degree, quality: c.quality }));
+  const echo = exerciseFromAnswer(exercise, answer);
+  assert.ok(echo.chords.every((c) => c.inversion === 0), 'played as written, not as heard');
+});
+
+test('inversions the user did write are played back as written', async () => {
+  const { exerciseFromAnswer } = await import('../src/generator.js');
+  const exercise = generateExercise(levelSettings(4), { rng: seeded(78) });
+  const answer = exercise.chords.map((c) => ({ degree: c.degree, quality: c.quality, inversion: 1 }));
+  const echo = exerciseFromAnswer(exercise, answer);
+  assert.ok(echo.chords.every((c) => c.inversion === 1));
 });
 
 test('a wrong answer keeps the beats of the chord it was answering', async () => {

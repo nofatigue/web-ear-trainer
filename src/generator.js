@@ -6,9 +6,10 @@
 // positions — so the player, answer sheet and grader never re-derive it.
 
 import {
-  degreeQuality, degreeRootMidi, chordPitches, formatRoman, keyUsesFlats,
+  degreeQuality, degreeRootMidi, chordPitches, formatRoman, keyUsesFlats, chordLabel,
 } from './theory.js';
 import { patternsForLength, askablePatterns, placements, rhythmChoices } from './rhythm.js';
+import { voiceProgression } from './voicing.js';
 
 // Weighted successors per degree in major. Functional harmony, roughly:
 // tonic goes anywhere, subdominants push to the dominant, the dominant resolves.
@@ -54,7 +55,27 @@ export const LEVELS = [
     blurb: 'Any major key · all triads, and the rhythm',
     settings: {
       keys: MAJOR_KEYS, mode: 'major', length: 4, pool: [0, 1, 2, 3, 4, 5, 6],
-      rhythmTier: 2, askRhythm: true,
+      rhythmTier: 2, asks: { rhythm: true },
+    },
+  },
+  {
+    id: 4,
+    name: 'Level 4',
+    blurb: 'Sevenths and inversions · which bass note?',
+    settings: {
+      keys: MAJOR_KEYS, mode: 'major', length: 4, pool: [0, 1, 2, 3, 4, 5, 6],
+      rhythmTier: 2, inversions: true, sevenths: 0.5,
+      asks: { rhythm: true, inversions: true, bass: true },
+    },
+  },
+  {
+    id: 5,
+    name: 'Level 5',
+    blurb: 'Longer, syncopated · which top voice?',
+    settings: {
+      keys: MAJOR_KEYS, mode: 'major', length: 5, pool: [0, 1, 2, 3, 4, 5, 6],
+      rhythmTier: 3, inversions: true, sevenths: 0.6,
+      asks: { rhythm: true, inversions: true, bass: true, top: true },
     },
   },
 ];
@@ -67,8 +88,15 @@ export const DEFAULT_SETTINGS = {
   bpm: 84,
   meter: { beats: 4, unit: 4 },
   octave: 3,
-  rhythmTier: 1,   // how hard the rhythms may get, 1-3
-  askRhythm: false, // whether the answer sheet asks which rhythm it was
+  rhythmTier: 1,      // how hard the rhythms may get, 1-3
+  inversions: false,  // may chords be voiced in inversion
+  sevenths: 0,        // chance the dominant (or ii) is played as a seventh
+  asks: {},           // which sections the answer sheet puts to the user
+};
+
+/** Sections the answer sheet can ask about, all off unless a level says so. */
+export const NO_QUESTIONS = {
+  rhythm: false, inversions: false, bass: false, top: false, melody: false,
 };
 
 export function levelSettings(levelId) {
@@ -160,13 +188,15 @@ export function generateDegrees(rng, { pool, length }) {
  */
 export function voiceChord(key, { degree, quality, alter = 0, inversion = 0 }, octave = DEFAULT_SETTINGS.octave) {
   const rootMidi = degreeRootMidi(key, degree, octave) + alter;
+  const upper = chordPitches(rootMidi, quality, inversion);
   return {
     degree,
     quality,
     alter,
     inversion,
     roman: formatRoman(degree, quality),
-    pitches: [rootMidi - 12, ...chordPitches(rootMidi, quality, inversion)],
+    label: chordLabel(degree, quality, inversion),
+    pitches: [upper[0] - 12, ...upper],
   };
 }
 
@@ -178,12 +208,33 @@ export function voiceChord(key, { degree, quality, alter = 0, inversion = 0 }, o
  */
 export function exerciseFromAnswer(exercise, answerChords) {
   let nextBeat = exercise.chords.reduce((max, c) => Math.max(max, c.startBeat + c.durationBeats), 0);
-  const chords = answerChords.map((answer, i) => {
+
+  const voiced = voiceProgression(
+    answerChords.map((answer) => ({
+      degree: answer.degree,
+      quality: answer.quality,
+      alter: answer.alter || 0,
+      rootMidi: degreeRootMidi(exercise.key, answer.degree, DEFAULT_SETTINGS.octave) + (answer.alter || 0),
+      // Unstated inversion means root position: that is what "V" says.
+      forceInversion: answer.inversion || 0,
+    })),
+  );
+
+  const chords = voiced.map((chord, i) => {
     const slot = exercise.chords[i];
     const placement = slot
       ? { startBeat: slot.startBeat, durationBeats: slot.durationBeats }
       : { startBeat: nextBeat++, durationBeats: 1 };
-    return { ...voiceChord(exercise.key, answer), ...placement };
+    return {
+      degree: chord.degree,
+      quality: chord.quality,
+      alter: chord.alter,
+      inversion: chord.inversion,
+      roman: formatRoman(chord.degree, chord.quality),
+      label: chordLabel(chord.degree, chord.quality, chord.inversion),
+      pitches: chord.pitches,
+      ...placement,
+    };
   });
   return { ...exercise, id: `${exercise.id}_answer`, chords, concepts: [] };
 }
@@ -198,7 +249,7 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
 
   // When the rhythm is going to be asked about, only use patterns that have
   // enough plausible siblings to make a real question of it.
-  const patterns = config.askRhythm
+  const patterns = config.asks && config.asks.rhythm
     ? askablePatterns(degrees.length, config.rhythmTier)
     : patternsForLength(degrees.length, config.rhythmTier);
   const pattern = patterns.length ? pick(rng, patterns) : null;
@@ -206,18 +257,46 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
     ? placements(pattern)
     : degrees.map((_, i) => ({ startBeat: i, durationBeats: 1 }));
 
-  const chords = degrees.map((degree, i) => ({
-    ...voiceChord(key, { degree, quality: degreeQuality(key.mode, degree) }, config.octave),
+  const qualities = degrees.map((degree) => {
+    const triad = degreeQuality(key.mode, degree);
+    // A dominant or supertonic sometimes arrives as a seventh chord.
+    if (rng() < config.sevenths) {
+      if (degree === 4) return 'dom7';
+      if (degree === 1 && triad === 'min') return 'min7';
+    }
+    return triad;
+  });
+
+  const voiced = voiceProgression(
+    degrees.map((degree, i) => ({
+      degree,
+      quality: qualities[i],
+      rootMidi: degreeRootMidi(key, degree, config.octave),
+    })),
+    { allowInversions: config.inversions },
+  );
+
+  const chords = voiced.map((chord, i) => ({
+    degree: chord.degree,
+    quality: chord.quality,
+    alter: 0,
+    inversion: chord.inversion,
+    roman: formatRoman(chord.degree, chord.quality),
+    label: chordLabel(chord.degree, chord.quality, chord.inversion),
+    pitches: chord.pitches,
     startBeat: slots[i].startBeat,
     durationBeats: slots[i].durationBeats,
   }));
+
+  const asks = { ...NO_QUESTIONS, ...config.asks };
 
   const concepts = [];
   chords.forEach((chord, i) => {
     concepts.push(`degree:${chord.roman}`);
     if (i > 0) concepts.push(`trans:${chords[i - 1].roman}>${chord.roman}`);
+    if (asks.inversions) concepts.push(`inv:${chord.inversion}`);
   });
-  if (pattern) concepts.push(`rhythm:${pattern.id}`);
+  if (pattern && asks.rhythm) concepts.push(`rhythm:${pattern.id}`);
 
   return {
     id: `x_${Math.floor(rng() * 0xffffff).toString(16)}`,
@@ -227,8 +306,9 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
     bpm: config.bpm,
     chords,
     melody: null,
+    asks,
     rhythmPatternId: pattern ? pattern.id : null,
-    rhythmChoices: pattern && config.askRhythm
+    rhythmChoices: pattern && asks.rhythm
       ? rhythmChoices(pattern, { rng, maxTier: config.rhythmTier }).map((p) => p.id)
       : null,
     concepts,
