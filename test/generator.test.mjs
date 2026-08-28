@@ -113,3 +113,47 @@ test('a pool with no cadence available still yields a progression', () => {
   assert.equal(degrees.length, 4);
   assert.ok(degrees.every((d) => [1, 2, 5].includes(d)));
 });
+
+test('an answer is voiced exactly as the real thing would have been', async () => {
+  const { voiceChord, exerciseFromAnswer } = await import('../src/generator.js');
+  const exercise = generateExercise(levelSettings(2), { rng: seeded(3) });
+  const truth = exercise.chords.map((c) => ({ degree: c.degree, quality: c.quality }));
+  const echo = exerciseFromAnswer(exercise, truth);
+  assert.deepEqual(
+    echo.chords.map((c) => c.pitches),
+    exercise.chords.map((c) => c.pitches),
+    'answering correctly sounds identical to the exercise',
+  );
+  assert.deepEqual(
+    echo.chords.map((c) => [c.startBeat, c.durationBeats]),
+    exercise.chords.map((c) => [c.startBeat, c.durationBeats]),
+  );
+  assert.equal(voiceChord({ tonic: 'C', mode: 'major' }, { degree: 0, quality: 'maj' }).pitches[0], 36);
+});
+
+test('a wrong answer keeps the beats of the chord it was answering', async () => {
+  const { exerciseFromAnswer } = await import('../src/generator.js');
+  const exercise = generateExercise(levelSettings(1), { rng: seeded(9) });
+  const answer = [{ degree: 0, quality: 'maj' }, { degree: 4, quality: 'maj' }];
+  const echo = exerciseFromAnswer(exercise, answer);
+  assert.equal(echo.chords.length, 2, 'a chord left blank simply stays silent');
+  assert.equal(echo.chords[1].startBeat, exercise.chords[1].startBeat);
+});
+
+test('chords written past the end of the excerpt are added on as further beats', async () => {
+  const { exerciseFromAnswer } = await import('../src/generator.js');
+  const exercise = generateExercise(levelSettings(1), { rng: seeded(11) }); // 3 chords
+  const answer = Array.from({ length: 5 }, () => ({ degree: 0, quality: 'maj' }));
+  const echo = exerciseFromAnswer(exercise, answer);
+  assert.equal(echo.chords.length, 5);
+  assert.equal(echo.chords[3].startBeat, 3);
+  assert.equal(echo.chords[4].startBeat, 4);
+});
+
+test('an altered degree is voiced flat or sharp, not diatonic', async () => {
+  const { voiceChord } = await import('../src/generator.js');
+  const key = { tonic: 'C', mode: 'major' };
+  const diatonic = voiceChord(key, { degree: 6, quality: 'min' });
+  const flattened = voiceChord(key, { degree: 6, quality: 'maj', alter: -1 });
+  assert.equal(flattened.pitches[1], diatonic.pitches[1] - 1, 'bVII sits a semitone below vii');
+});

@@ -1,4 +1,8 @@
-// Review: what you wrote, what it was, and why.
+// Review: what was played, what you wrote, and the two side by side.
+//
+// The comparison strip is the point of this screen. A wrong chord you can hear
+// teaches more than a red mark you can only read, so every chip is playable and
+// the whole passage can be heard both ways in a row.
 
 const STATUS_LABEL = {
   correct: 'correct',
@@ -8,7 +12,25 @@ const STATUS_LABEL = {
   extra: 'extra',
 };
 
-export function renderReview(root, result, exercise, { onPlayChord } = {}) {
+function chip(text, { status = '', role = '', title = '', onPlay = null } = {}) {
+  const el = document.createElement(onPlay ? 'button' : 'span');
+  el.className = `chip chip-${role}${status ? ` is-${status}` : ''}`;
+  el.textContent = text;
+  if (onPlay) {
+    el.type = 'button';
+    el.title = title;
+    el.addEventListener('click', onPlay);
+  }
+  return el;
+}
+
+/**
+ * @param result      grading result
+ * @param exercise    what was played
+ * @param answerPlay  the same passage as the user answered it, playable
+ */
+export function renderReview(root, result, exercise, answerPlay, handlers = {}) {
+  const { onPlayChord = null, onPlayTruth = null, onPlayYours = null, onPlayBoth = null } = handlers;
   const pct = Math.round(result.score * 100);
   root.innerHTML = '';
 
@@ -21,51 +43,99 @@ export function renderReview(root, result, exercise, { onPlayChord } = {}) {
   `;
   root.append(head);
 
-  const list = document.createElement('div');
-  list.className = 'review-slots';
-  for (const slot of result.slots) {
-    const row = document.createElement('div');
-    row.className = `review-slot is-${slot.status}`;
+  // --- the comparison strip: played over yours, aligned by slot ---
 
-    const chord = exercise.chords[slot.index];
+  const strip = document.createElement('div');
+  strip.className = 'strip';
+  strip.style.setProperty('--slots', String(result.slots.length));
+
+  const rows = [
+    { key: 'played', label: 'Played' },
+    { key: 'yours', label: 'You wrote' },
+  ];
+
+  for (const row of rows) {
+    const label = document.createElement('span');
+    label.className = 'strip-label';
+    label.textContent = row.label;
+    strip.append(label);
+
+    const line = document.createElement('div');
+    line.className = 'strip-row';
+    line.dataset.side = row.key;
+
+    result.slots.forEach((slot, i) => {
+      const played = row.key === 'played';
+      const chord = played ? exercise.chords[i] : answerPlay.chords[i];
+      const text = played ? (slot.expected || '·') : (slot.actual || '·');
+      const cell = chip(text, {
+        role: row.key,
+        status: played ? '' : slot.status,
+        title: chord ? 'Hear this chord' : '',
+        onPlay: chord && onPlayChord ? () => onPlayChord(chord) : null,
+      });
+      cell.dataset.index = String(i);
+      line.append(cell);
+    });
+
+    strip.append(line);
+  }
+  root.append(strip);
+
+  const controls = document.createElement('div');
+  controls.className = 'review-controls';
+  const buttons = [
+    ['Hear it again', onPlayTruth, 'space'],
+    ['Hear your answer', onPlayYours, 'y'],
+    ['Both, in a row', onPlayBoth, 'b'],
+  ];
+  for (const [text, handler, key] of buttons) {
+    if (!handler) continue;
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'review-chord';
-    button.textContent = slot.expected || '–';
-    if (chord && onPlayChord) {
-      button.title = 'Hear this chord on its own';
-      button.addEventListener('click', () => onPlayChord(chord));
-    } else {
-      button.disabled = true;
-    }
-
-    const detail = document.createElement('div');
-    detail.className = 'review-detail';
-    const yours = slot.actual ? `you wrote <b>${escape(slot.actual)}</b>` : 'you left this blank';
-    detail.innerHTML = `<span class="review-status">${STATUS_LABEL[slot.status]}</span>
-      <span class="review-yours">${yours}</span>`;
-    if (slot.reason) {
-      const why = document.createElement('div');
-      why.className = 'review-reason';
-      why.textContent = slot.reason;
-      detail.append(why);
-    }
-
-    row.append(button, detail);
-    list.append(row);
+    button.className = 'btn';
+    button.innerHTML = `${text} <kbd>${key}</kbd>`;
+    button.addEventListener('click', handler);
+    controls.append(button);
   }
-  root.append(list);
+  root.append(controls);
 
+  // --- only the slots that went wrong get an explanation ---
+
+  const notes = document.createElement('div');
+  notes.className = 'review-reasons';
+  result.slots.forEach((slot, i) => {
+    if (!slot.reason) return;
+    const row = document.createElement('div');
+    row.className = `review-reason is-${slot.status}`;
+    row.innerHTML = `<span class="review-slot-n">${i + 1}</span>
+      <span class="review-status">${STATUS_LABEL[slot.status]}</span>
+      <span class="review-why"></span>`;
+    row.querySelector('.review-why').textContent = slot.reason;
+    notes.append(row);
+  });
   for (const note of result.notes) {
-    const el = document.createElement('p');
-    el.className = 'review-note';
-    el.textContent = note;
-    root.append(el);
+    const row = document.createElement('div');
+    row.className = 'review-note';
+    row.textContent = note;
+    notes.append(row);
+  }
+  if (notes.children.length) root.append(notes);
+
+  if (result.perfect) {
+    const clean = document.createElement('p');
+    clean.className = 'review-clean';
+    clean.textContent = 'Clean — every chord and every quality.';
+    root.append(clean);
   }
 }
 
-function escape(text) {
-  return String(text).replace(/[&<>"]/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]
-  ));
+/** Light up whichever chip is currently sounding. */
+export function highlightReview(root, index, side) {
+  for (const row of root.querySelectorAll('.strip-row')) {
+    const active = row.dataset.side === side;
+    for (const cell of row.children) {
+      cell.classList.toggle('is-sounding', active && Number(cell.dataset.index) === index);
+    }
+  }
 }

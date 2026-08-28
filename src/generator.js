@@ -5,7 +5,9 @@
 // The generator resolves all theory up front — voiced MIDI pitches, beat
 // positions — so the player, answer sheet and grader never re-derive it.
 
-import { degreeQuality, degreeRootMidi, chordPitches, formatRoman, keyUsesFlats } from './theory.js';
+import {
+  degreeQuality, degreeRootMidi, chordPitches, formatRoman, keyUsesFlats,
+} from './theory.js';
 import { patternsForLength, placements } from './rhythm.js';
 
 // Weighted successors per degree in major. Functional harmony, roughly:
@@ -147,6 +149,41 @@ export function generateDegrees(rng, { pool, length }) {
 }
 
 /**
+ * Realise one chord in a key: bass an octave under the root, triad above.
+ * Shared by the generator and by playback of what the user wrote, so an answer
+ * is heard in exactly the voicing the real thing would have had.
+ */
+export function voiceChord(key, { degree, quality, alter = 0, inversion = 0 }, octave = DEFAULT_SETTINGS.octave) {
+  const rootMidi = degreeRootMidi(key, degree, octave) + alter;
+  return {
+    degree,
+    quality,
+    alter,
+    inversion,
+    roman: formatRoman(degree, quality),
+    pitches: [rootMidi - 12, ...chordPitches(rootMidi, quality, inversion)],
+  };
+}
+
+/**
+ * Dress an answer up as a playable exercise, so the user can hear what they
+ * wrote against what was played. Chords keep the beat placement of the chord
+ * they were answering; anything written past the end of the excerpt is added on
+ * as further beats, and a chord left blank simply stays silent.
+ */
+export function exerciseFromAnswer(exercise, answerChords) {
+  let nextBeat = exercise.chords.reduce((max, c) => Math.max(max, c.startBeat + c.durationBeats), 0);
+  const chords = answerChords.map((answer, i) => {
+    const slot = exercise.chords[i];
+    const placement = slot
+      ? { startBeat: slot.startBeat, durationBeats: slot.durationBeats }
+      : { startBeat: nextBeat++, durationBeats: 1 };
+    return { ...voiceChord(exercise.key, answer), ...placement };
+  });
+  return { ...exercise, id: `${exercise.id}_answer`, chords, concepts: [] };
+}
+
+/**
  * Build a complete exercise. `rng` is injectable so tests are deterministic.
  */
 export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.random } = {}) {
@@ -160,19 +197,11 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
     ? placements(pattern)
     : degrees.map((_, i) => ({ startBeat: i, durationBeats: 1 }));
 
-  const chords = degrees.map((degree, i) => {
-    const quality = degreeQuality(key.mode, degree);
-    const rootMidi = degreeRootMidi(key, degree, config.octave);
-    return {
-      degree,
-      quality,
-      inversion: 0,
-      roman: formatRoman(degree, quality),
-      pitches: [rootMidi - 12, ...chordPitches(rootMidi, quality)],
-      startBeat: slots[i].startBeat,
-      durationBeats: slots[i].durationBeats,
-    };
-  });
+  const chords = degrees.map((degree, i) => ({
+    ...voiceChord(key, { degree, quality: degreeQuality(key.mode, degree) }, config.octave),
+    startBeat: slots[i].startBeat,
+    durationBeats: slots[i].durationBeats,
+  }));
 
   const concepts = [];
   chords.forEach((chord, i) => {

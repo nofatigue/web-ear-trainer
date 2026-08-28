@@ -2,10 +2,10 @@
 
 import { AudioEngine } from './audio/engine.js';
 import { Player } from './audio/player.js';
-import { generateExercise, levelSettings, LEVELS } from './generator.js';
+import { generateExercise, exerciseFromAnswer, levelSettings, LEVELS } from './generator.js';
 import { gradeExercise } from './grading.js';
 import { createAnswerSheet } from './ui/answer-sheet.js';
-import { renderReview } from './ui/review.js';
+import { renderReview, highlightReview } from './ui/review.js';
 
 const LEVEL_KEY = 'wet.level';
 
@@ -15,6 +15,7 @@ const player = new Player(engine);
 const state = {
   level: loadLevel(),
   exercise: null,
+  answerPlay: null, // what the user wrote, dressed up as something playable
   phase: 'cold', // cold -> answering -> graded
   replays: 0,
   clickOn: false,
@@ -109,6 +110,7 @@ async function begin() {
 function next() {
   player.stop();
   state.exercise = generateExercise(levelSettings(state.level));
+  state.answerPlay = null;
   state.phase = 'answering';
   state.replays = 0;
   el.review.hidden = true;
@@ -119,11 +121,11 @@ function next() {
   sheet.focus();
 }
 
-function play() {
+function play({ countIn = true } = {}) {
   if (!state.exercise || !engine.ready) return;
   state.replays += 1;
   player.play(state.exercise, {
-    countIn: true,
+    countIn,
     click: state.clickOn,
     onChord: highlight,
     onDone: render,
@@ -142,9 +144,12 @@ function toggleClick() {
   render();
 }
 
-function highlight(index) {
-  const boxes = el.beatmap.querySelectorAll('.chord-box');
-  boxes.forEach((box, i) => box.classList.toggle('is-sounding', i === index));
+function highlight(index, side = 'played') {
+  const sounding = side === 'played' ? index : null;
+  el.beatmap.querySelectorAll('.chord-box').forEach((box, i) => {
+    box.classList.toggle('is-sounding', i === sounding);
+  });
+  if (state.phase === 'graded') highlightReview(el.review, index, side);
 }
 
 function submit(answer) {
@@ -152,16 +157,32 @@ function submit(answer) {
   player.stop();
   const result = gradeExercise(state.exercise, answer);
   state.phase = 'graded';
+  state.answerPlay = exerciseFromAnswer(state.exercise, answer.chords);
   state.session.count += 1;
   state.session.scoreSum += result.score;
   if (result.perfect) state.session.perfect += 1;
   sheet.setEnabled(false);
   el.review.hidden = false;
-  renderReview(el.review, result, state.exercise, {
+  renderReview(el.review, result, state.exercise, state.answerPlay, {
     onPlayChord: (chord) => player.playChord(chord),
+    onPlayTruth: () => play({ countIn: false }),
+    onPlayYours: playYours,
+    onPlayBoth: playBoth,
   });
   render();
   el['btn-next'].focus();
+}
+
+function playYours() {
+  if (!state.answerPlay) return;
+  player.play(state.answerPlay, { countIn: false, onChord: (i) => highlight(i, 'yours'), onDone: render });
+  render();
+}
+
+function playBoth() {
+  if (!state.answerPlay) return;
+  player.playComparison(state.exercise, state.answerPlay, { onChord: highlight, onDone: render });
+  render();
 }
 
 function renderBeatmap() {
@@ -173,7 +194,7 @@ function renderBeatmap() {
     box.className = 'chord-box';
     box.style.flexGrow = String(chord.durationBeats);
     box.innerHTML = `<span class="chord-n">${i + 1}</span>
-      <span class="chord-value">${state.phase === 'graded' ? chord.roman : '?'}</span>`;
+      <span class="chord-value">?</span>`;
     el.beatmap.append(box);
   });
 }
@@ -187,6 +208,9 @@ function render() {
   el['btn-play'].disabled = !exercise;
   el['btn-tonic'].disabled = !exercise;
   el['btn-next'].hidden = phase !== 'graded';
+  // Once graded, the comparison strip says everything the beatmap was saying,
+  // and says it against what the user wrote.
+  el.beatmap.hidden = phase === 'graded';
   el['btn-click'].classList.toggle('is-on', state.clickOn);
   el['btn-click'].setAttribute('aria-pressed', String(state.clickOn));
   el['replay-count'].textContent = state.replays > 1 ? `${state.replays} plays` : '';
@@ -205,14 +229,17 @@ function onKey(event) {
   if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
 
   const key = event.key.toLowerCase();
-  const handled = key === ' ' || key === 't' || (key === 'n' && state.phase === 'graded');
+  const graded = state.phase === 'graded';
+  const handled = key === ' ' || key === 't' || (graded && 'nyb'.includes(key));
   if (!handled) return;
 
   // Shortcuts move focus into the answer field, so the keypress has to be
   // consumed here or the character lands in the input we just focused.
   event.preventDefault();
-  if (key === ' ') play();
+  if (key === ' ') play({ countIn: !graded });
   else if (key === 't') playTonic();
+  else if (key === 'y') playYours();
+  else if (key === 'b') playBoth();
   else next();
 }
 

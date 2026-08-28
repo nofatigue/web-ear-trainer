@@ -267,7 +267,7 @@ code {
 .review {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 1rem;
   padding-top: 1.25rem;
   border-top: 1px solid var(--rule);
 }
@@ -284,54 +284,88 @@ code {
 .review-score .pct { font-size: 1rem; margin-left: 0.1rem; color: var(--faint); }
 .review-sub { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); }
 
-.review-slots { display: flex; flex-direction: column; }
+/* The comparison strip: two aligned rows, one column per chord slot. */
 
-.review-slot {
+.strip {
   display: grid;
-  grid-template-columns: 3.6rem minmax(0, 1fr);
-  gap: 0.75rem;
-  align-items: start;
-  padding: 0.5rem 0;
-  border-top: 1px solid var(--rule);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.3rem 0.7rem;
+  align-items: center;
 }
-.review-slot:last-child { border-bottom: 1px solid var(--rule); }
 
-.review-chord {
+.strip-label {
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: right;
+}
+
+.strip-row {
+  display: grid;
+  grid-template-columns: repeat(var(--slots), minmax(0, 1fr));
+  gap: 0.3rem;
+}
+
+.chip {
   font-family: var(--mono);
   font-size: 0.95rem;
   font-weight: 500;
-  padding: 0.3rem 0;
-  background: var(--card);
-  color: var(--ink);
+  text-align: center;
+  padding: 0.4rem 0.2rem;
   border: 1px solid var(--rule);
   border-radius: 3px;
-  cursor: pointer;
+  background: var(--card);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.review-chord:hover:not(:disabled) { border-color: var(--brass); color: var(--brass); }
-.is-correct .review-chord { border-left: 2px solid var(--teal); }
-.is-near .review-chord { border-left: 2px solid var(--amber); }
-.is-wrong .review-chord, .is-missing .review-chord, .is-extra .review-chord { border-left: 2px solid var(--rust); }
+button.chip { cursor: pointer; }
+button.chip:hover { border-color: var(--brass); }
+.chip.is-sounding { border-color: var(--brass); background: var(--sunk); color: var(--brass); }
 
-.review-detail { display: flex; flex-direction: column; gap: 0.1rem; font-size: 0.85rem; }
+.chip-played { border-bottom: 2px solid var(--rule); }
+.chip-yours.is-correct { border-bottom: 2px solid var(--teal); color: var(--teal); }
+.chip-yours.is-near { border-bottom: 2px solid var(--amber); color: var(--amber); }
+.chip-yours.is-wrong,
+.chip-yours.is-extra { border-bottom: 2px solid var(--rust); color: var(--rust); }
+.chip-yours.is-missing { border-bottom: 2px dashed var(--rust); color: var(--faint); }
+
+.review-controls { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.review-reasons { display: flex; flex-direction: column; }
+
+.review-reason {
+  display: grid;
+  grid-template-columns: 1.2rem 5.5rem minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--rule);
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.review-reason:last-child { border-bottom: 1px solid var(--rule); }
+.review-slot-n { font-family: var(--mono); font-size: 0.7rem; color: var(--faint); }
 .review-status {
   font-family: var(--mono);
   font-size: 0.63rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  margin-right: 0.5rem;
 }
-.is-correct .review-status { color: var(--teal); }
 .is-near .review-status { color: var(--amber); }
 .is-wrong .review-status, .is-missing .review-status, .is-extra .review-status { color: var(--rust); }
-.review-yours { color: var(--muted); }
-.review-reason { color: var(--muted); font-size: 0.83rem; }
+
 .review-note {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
+  padding: 0.4rem 0 0.4rem 0.75rem;
   border-left: 2px solid var(--amber);
-  padding-left: 0.75rem;
+  font-size: 0.86rem;
+  color: var(--muted);
 }
+
+.review-clean { margin: 0; font-size: 0.9rem; color: var(--teal); }
 
 .next-row { display: flex; }
 
@@ -367,7 +401,9 @@ code {
 
 @media (max-width: 560px) {
   .app { padding: 1.75rem 1rem 3rem; }
-  .review-slot { grid-template-columns: 3rem minmax(0, 1fr); }
+  .chip { font-size: 0.85rem; }
+  .review-reason { grid-template-columns: 1rem minmax(0, 1fr); }
+  .review-reason .review-why { grid-column: 2; }
 }
 
 @media (prefers-reduced-motion: reduce) {

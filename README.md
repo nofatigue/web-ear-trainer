@@ -8,7 +8,8 @@ and so on.
 No build step, no dependencies, no backend: plain ES modules and the Web Audio
 API.
 
-**Current state — M1.** Progression dictation at levels 1–3. Rhythm, inversions
+**Current state — M2.** Progression dictation at levels 1–3, with a review that
+plays your own answer back against what was actually played. Rhythm, inversions
 and melody dictation arrive in M3–M5; see [PLAN.md](PLAN.md) for the full design
 and milestones.
 
@@ -39,6 +40,8 @@ node --test test/*.test.mjs
 | `t` | tonic reference — the tonic note, then the I chord |
 | `enter` | check your answer |
 | `n` | next exercise |
+| `y` | after grading: hear your answer as you wrote it |
+| `b` | after grading: hear both, one after the other |
 
 Answers are roman numerals, and case carries the quality: `V` is major, `vi` is
 minor, `vii°` diminished. The parser is forgiving about the rest — `viio`,
