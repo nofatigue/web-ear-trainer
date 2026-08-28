@@ -230,6 +230,12 @@ Presets that switch on generator options and answer-sheet sections together:
 Levels are presets over the same settings object, so any individual switch stays
 user-overridable.
 
+Levels 1–3 ship in M1: they differ only in chord pool, length and key, all of
+which are already generator parameters, so the picker costs little more than the
+picker itself. Being able to switch transposition on is worth having early — it
+is the biggest single difficulty jump in early ear training. Level 3's rhythm
+question arrives with M3; levels 4–6 unlock as M4 and M5 land.
+
 ---
 
 ## 9. Audio
@@ -257,8 +263,8 @@ Each milestone ends with something playable in the browser.
 - **M0 — skeleton.** `index.html`, module wiring, audio engine + scheduler, play
   a hard-coded C–F–G–C in time. Proves the timing model.
 - **M1 — the core loop.** `theory.js`, generator with transition table, roman
-  numeral text input + parser, index-aligned grading, next-exercise button.
-  This is the first genuinely usable version.
+  numeral text input + parser, index-aligned grading, next-exercise button,
+  and levels 1–3 (see below). This is the first genuinely usable version.
 - **M2 — review UX.** Per-chord replay, correct-vs-yours diff, "play my answer".
 - **M3 — rhythm.** Pattern library, rhythmic generation, count-in, rhythm question.
 - **M4 — voicing detail.** Voice-leading generator, inversion / bass / top-voice

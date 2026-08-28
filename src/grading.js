@@ -1,0 +1,111 @@
+// Grading: exercise + answer -> a result tree.
+//
+// Chords align by index, chord n against chord n. The score matters less than
+// the reason, so every slot carries one: right root but wrong quality, right
+// progression in the wrong key, and so on. Review and (later) stats both read
+// this same structure. Pure: no DOM.
+
+import { formatRoman, QUALITY_LABELS, ROMAN } from './theory.js';
+
+const DEGREE_POINT = 1;
+const QUALITY_POINT = 1;
+
+function describe(chord) {
+  return chord ? formatRoman(chord.degree, chord.quality) : null;
+}
+
+function gradeSlot(expected, given, index) {
+  const slot = {
+    index,
+    expected: describe(expected),
+    expectedQuality: expected ? expected.quality : null,
+    actual: given ? (given.text || describe(given)) : null,
+    earned: 0,
+    possible: DEGREE_POINT + QUALITY_POINT,
+  };
+
+  if (!expected) {
+    // Hearing a chord that wasn't there is a real error, so it costs a point —
+    // but only one, since there is no quality to have got right or wrong.
+    return { ...slot, status: 'extra', possible: DEGREE_POINT, reason: 'There was no chord here.' };
+  }
+  if (!given) {
+    return { ...slot, status: 'missing', reason: `Nothing written — this was ${slot.expected}.` };
+  }
+
+  const degreeOk = given.degree === expected.degree && (given.alter || 0) === 0;
+  const qualityOk = given.quality === expected.quality;
+
+  if (degreeOk && qualityOk) {
+    return { ...slot, status: 'correct', earned: slot.possible, reason: null };
+  }
+  if (degreeOk) {
+    return {
+      ...slot,
+      status: 'near',
+      earned: DEGREE_POINT,
+      reason: `Right root, wrong quality — that ${ROMAN[expected.degree]} was ${QUALITY_LABELS[expected.quality]}.`,
+    };
+  }
+  if (qualityOk) {
+    return {
+      ...slot,
+      status: 'wrong',
+      earned: QUALITY_POINT,
+      reason: `Right quality, wrong root — it was ${slot.expected}.`,
+    };
+  }
+  return { ...slot, status: 'wrong', reason: `It was ${slot.expected}.` };
+}
+
+/** Every degree off by the same step means the shape was heard, the key wasn't. */
+function transpositionNote(expected, given) {
+  if (!given.length || given.length !== expected.length) return null;
+  const shift = (given[0].degree - expected[0].degree + 7) % 7;
+  if (shift === 0) return null;
+  const consistent = expected.every((chord, i) => (given[i].degree - chord.degree + 7) % 7 === shift);
+  if (!consistent) return null;
+  const steps = ['', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh'][shift];
+  return `Right shape, wrong key centre — you wrote the whole progression a ${steps} up. Lean on the tonic reference before answering.`;
+}
+
+/**
+ * Grade one attempt.
+ *
+ * Sections left blank are excluded from the denominator rather than counted
+ * wrong, so switching a section on can never drag a score down for reasons
+ * that have nothing to do with hearing.
+ */
+export function gradeExercise(exercise, answer) {
+  const expected = exercise.chords;
+  const given = (answer && answer.chords) || [];
+  const attemptedProgression = given.length > 0;
+
+  const slots = [];
+  if (attemptedProgression) {
+    const n = Math.max(expected.length, given.length);
+    for (let i = 0; i < n; i++) slots.push(gradeSlot(expected[i], given[i], i));
+  }
+
+  const notes = [];
+  if (attemptedProgression && given.length !== expected.length) {
+    notes.push(
+      `You wrote ${given.length} chord${given.length === 1 ? '' : 's'}; there were ${expected.length}.`,
+    );
+  }
+  const transposed = attemptedProgression ? transpositionNote(expected, given) : null;
+  if (transposed) notes.push(transposed);
+
+  const earned = slots.reduce((sum, s) => sum + s.earned, 0);
+  const possible = slots.reduce((sum, s) => sum + s.possible, 0);
+
+  return {
+    slots,
+    notes,
+    earned,
+    possible,
+    score: possible ? earned / possible : 0,
+    perfect: possible > 0 && earned === possible,
+    attempted: attemptedProgression,
+  };
+}

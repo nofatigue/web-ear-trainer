@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ear Trainer — chord progression dictation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script type="module" src="src/app.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="top">
+    <div class="brand">
+      <h1>Ear Trainer</h1>
+      <p class="tagline">chord progression dictation</p>
+    </div>
+    <p class="session" id="session"></p>
+  </header>
+
+  <nav class="levels" id="levels" aria-label="Difficulty"></nav>
+
+  <main>
+    <section class="stage" aria-label="Playback">
+      <div class="transport">
+        <button class="btn btn-primary" id="btn-play" type="button" disabled>Play <kbd>space</kbd></button>
+        <button class="btn" id="btn-tonic" type="button" disabled>Tonic <kbd>t</kbd></button>
+        <button class="btn btn-toggle" id="btn-click" type="button" aria-pressed="false">Click track</button>
+        <span class="replay-count" id="replay-count"></span>
+      </div>
+      <div class="beatmap" id="beatmap" aria-hidden="true"></div>
+      <p class="key-label" id="key-label"></p>
+    </section>
+
+    <section class="sheet" id="sheet" aria-label="Answer sheet"></section>
+
+    <section class="review" id="review" aria-label="Result" hidden></section>
+
+    <div class="next-row">
+      <button class="btn btn-primary" id="btn-next" type="button" hidden>Next exercise <kbd>n</kbd></button>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <span>M1 · progression dictation, levels 1–3</span>
+    <span>Rhythm, inversions and melody arrive in M3–M5.</span>
+  </footer>
+
+</div>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <h2>Chord progression dictation</h2>
+    <p>A short progression plays. Write down the roman numerals you hear — the tonic
+      reference is always one keypress away.</p>
+    <button class="btn btn-primary btn-lg" id="btn-start" type="button">Start · enable sound</button>
+    <p class="gate-note">Browsers only allow audio after a click.</p>
+    <p class="gate-error" role="alert"></p>
+  </div>
+</div>
+
+</body>
+</html>
