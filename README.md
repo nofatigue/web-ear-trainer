@@ -8,11 +8,12 @@ and so on.
 No build step, no dependencies, no backend: plain ES modules and the Web Audio
 API.
 
-**Current state — M5.** Six levels: plain triads in C, then transposition and a
+**Current state — M6.** Six levels: plain triads in C, then transposition and a
 rhythm question, then voice-led inversions, sevenths and bass/top-voice
 questions, and finally a melody over the progression to write down too. The
 review plays your own answer back — chords and melody — against what was
-actually played. Rhythm, inversions
+actually played, and the trainer keeps track of which chords, transitions,
+inversions and rhythms you miss, leaning the next exercise toward them. Rhythm, inversions
 and melody dictation arrive in M3–M5; see [PLAN.md](PLAN.md) for the full design
 and milestones.
 

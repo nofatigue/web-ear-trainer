@@ -132,15 +132,22 @@ function pickWeighted(rng, weights) {
   return Number(entries[entries.length - 1][0]);
 }
 
-/** Walk the transition table, staying inside the pool and avoiding repeats. */
-function walk(rng, pool, steps, start = 0) {
+/**
+ * Walk the transition table, staying inside the pool and avoiding repeats.
+ *
+ * `weights` (from the user's stats) scales each successor, so the chords being
+ * missed come up more often than the ones already learned.
+ */
+function walk(rng, pool, steps, start = 0, weights = null) {
   const path = [pool.includes(start) ? start : pool[0]];
   while (path.length < steps) {
     const from = path[path.length - 1];
     const options = {};
     for (const [to, w] of Object.entries(TRANSITIONS[from] || {})) {
       const degree = Number(to);
-      if (pool.includes(degree) && degree !== from) options[degree] = w;
+      if (pool.includes(degree) && degree !== from) {
+        options[degree] = w * (weights && weights[degree] !== undefined ? weights[degree] : 1);
+      }
     }
     const next = pickWeighted(rng, options);
     if (next !== null) {
@@ -167,16 +174,16 @@ function chooseCadence(rng, usable) {
  * walk's last chord produces "I I V I", and for a short excerpt a cadence
  * starting on the tonic would leave no room to leave home at all.
  */
-export function generateDegrees(rng, { pool, length }) {
+export function generateDegrees(rng, { pool, length, weights = null }) {
   const start = pool.includes(0) ? 0 : pool[0];
   const headLength = length - 2;
   const usable = CADENCES.filter(
     (c) => c.every((d) => pool.includes(d)) && (headLength !== 1 || c[0] !== start),
   );
-  if (headLength < 1 || !usable.length) return walk(rng, pool, length, start);
+  if (headLength < 1 || !usable.length) return walk(rng, pool, length, start, weights);
 
   const cadence = chooseCadence(rng, usable);
-  const head = walk(rng, pool, headLength, start);
+  const head = walk(rng, pool, headLength, start, weights);
   const last = head.length - 1;
   if (head[last] === cadence[0]) {
     const prev = head[last - 1];
@@ -272,14 +279,14 @@ export function exerciseFromAnswer(exercise, answerChords, answerMelody = null) 
 /**
  * Build a complete exercise. `rng` is injectable so tests are deterministic.
  */
-export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.random } = {}) {
+export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.random, weights = null } = {}) {
   const config = { ...DEFAULT_SETTINGS, ...settings };
   const key = { tonic: pick(rng, config.keys), mode: config.mode };
   // A level may fix the number of chords or give a range to draw from.
   const length = Array.isArray(config.length)
     ? config.length[0] + Math.floor(rng() * (config.length[1] - config.length[0] + 1))
     : config.length;
-  const degrees = generateDegrees(rng, { ...config, length });
+  const degrees = generateDegrees(rng, { ...config, length, weights });
 
   // When the rhythm is going to be asked about, only use patterns that have
   // enough plausible siblings to make a real question of it.

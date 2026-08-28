@@ -5,6 +5,9 @@ import { Player } from './audio/player.js';
 import { generateExercise, exerciseFromAnswer, levelSettings, LEVELS } from './generator.js';
 import { gradeExercise } from './grading.js';
 import { createAnswerSheet } from './ui/answer-sheet.js';
+import { renderStats } from './ui/stats-panel.js';
+import * as stats from './stats.js';
+import { formatRoman, degreeQuality } from './theory.js';
 import { renderReview, highlightReview } from './ui/review.js';
 
 const LEVEL_KEY = 'wet.level';
@@ -13,6 +16,7 @@ const engine = new AudioEngine();
 const player = new Player(engine);
 
 const state = {
+  store: stats.load(),
   level: loadLevel(),
   exercise: null,
   answerPlay: null, // what the user wrote, dressed up as something playable
@@ -44,7 +48,8 @@ function saveLevel(id) {
 
 function init() {
   for (const id of ['gate', 'btn-start', 'levels', 'btn-play', 'btn-tonic', 'btn-click',
-    'btn-next', 'beatmap', 'playbar', 'key-label', 'sheet', 'review', 'session', 'replay-count']) {
+    'btn-next', 'beatmap', 'playbar', 'key-label', 'sheet', 'review', 'session', 'replay-count',
+    'stats', 'stats-details', 'stats-file']) {
     el[id] = document.getElementById(id);
   }
 
@@ -57,6 +62,11 @@ function init() {
   el['btn-next'].addEventListener('click', next);
   el['btn-click'].addEventListener('click', toggleClick);
   player.onProgress = movePlayhead;
+
+  el['stats-details'].addEventListener('toggle', () => {
+    if (el['stats-details'].open) renderStatsPanel();
+  });
+  el['stats-file'].addEventListener('change', importStats);
 
   document.addEventListener('keydown', onKey);
   render();
@@ -104,9 +114,19 @@ async function begin() {
   next();
 }
 
+/** Bias the next exercise toward the degrees this user keeps missing. */
+function drillWeights(settings) {
+  return stats.degreeWeights(
+    state.store,
+    settings.pool,
+    (degree) => formatRoman(degree, degreeQuality(settings.mode, degree)),
+  );
+}
+
 function next() {
   player.stop();
-  state.exercise = generateExercise(levelSettings(state.level));
+  const settings = levelSettings(state.level);
+  state.exercise = generateExercise(settings, { weights: drillWeights(settings) });
   state.answerPlay = null;
   state.phase = 'answering';
   state.replays = 0;
@@ -165,6 +185,9 @@ function submit(answer) {
   state.session.count += 1;
   state.session.scoreSum += result.score;
   if (result.perfect) state.session.perfect += 1;
+  stats.recordAttempt(state.store, state.exercise, result);
+  stats.save(state.store);
+  if (el['stats-details'].open) renderStatsPanel();
   sheet.setEnabled(false);
   if (state.exercise.rhythmChoices) sheet.markRhythm(state.exercise.rhythmPatternId);
   el.review.hidden = false;
@@ -266,6 +289,47 @@ function render() {
 
   renderPlaybar();
   renderBeatmap();
+}
+
+function renderStatsPanel() {
+  renderStats(el.stats, state.store, stats.summary(state.store), {
+    onExport: exportStats,
+    onImport: () => el['stats-file'].click(),
+    onReset: resetStats,
+  });
+}
+
+function exportStats() {
+  const blob = new Blob([stats.toJSON(state.store)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'ear-trainer-progress.json';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importStats(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  try {
+    state.store = stats.fromJSON(await file.text());
+    stats.save(state.store);
+    renderStatsPanel();
+  } catch (error) {
+    const warning = document.createElement('p');
+    warning.className = 'stats-error';
+    warning.textContent = error.message;
+    el.stats.append(warning);
+  }
+  event.target.value = '';
+}
+
+function resetStats() {
+  if (!window.confirm('Clear everything the trainer has learned about your ear?')) return;
+  state.store = stats.emptyStore();
+  stats.save(state.store);
+  renderStatsPanel();
 }
 
 function onKey(event) {
