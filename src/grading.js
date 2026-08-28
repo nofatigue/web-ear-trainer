@@ -9,6 +9,7 @@ import { formatRoman, QUALITY_LABELS, ROMAN } from './theory.js';
 
 const DEGREE_POINT = 1;
 const QUALITY_POINT = 1;
+const RHYTHM_POINT = 1;
 
 function describe(chord) {
   return chord ? formatRoman(chord.degree, chord.quality) : null;
@@ -69,6 +70,22 @@ function transpositionNote(expected, given) {
   return `Right shape, wrong key centre — you wrote the whole progression a ${steps} up. Lean on the tonic reference before answering.`;
 }
 
+/** The rhythm question, when the exercise asked it and the user answered. */
+function gradeRhythm(exercise, answer) {
+  const asked = Boolean(exercise.rhythmChoices && exercise.rhythmChoices.length);
+  const given = answer ? answer.rhythmPatternId : null;
+  if (!asked || !given) return null;
+  const correct = given === exercise.rhythmPatternId;
+  return {
+    expected: exercise.rhythmPatternId,
+    actual: given,
+    correct,
+    earned: correct ? RHYTHM_POINT : 0,
+    possible: RHYTHM_POINT,
+    reason: correct ? null : 'Count the excerpt again with the click on — the chord changes are what carry the pattern.',
+  };
+}
+
 /**
  * Grade one attempt.
  *
@@ -96,16 +113,19 @@ export function gradeExercise(exercise, answer) {
   const transposed = attemptedProgression ? transpositionNote(expected, given) : null;
   if (transposed) notes.push(transposed);
 
-  const earned = slots.reduce((sum, s) => sum + s.earned, 0);
-  const possible = slots.reduce((sum, s) => sum + s.possible, 0);
+  const rhythm = gradeRhythm(exercise, answer);
+
+  const earned = slots.reduce((sum, s) => sum + s.earned, 0) + (rhythm ? rhythm.earned : 0);
+  const possible = slots.reduce((sum, s) => sum + s.possible, 0) + (rhythm ? rhythm.possible : 0);
 
   return {
     slots,
+    rhythm,
     notes,
     earned,
     possible,
     score: possible ? earned / possible : 0,
     perfect: possible > 0 && earned === possible,
-    attempted: attemptedProgression,
+    attempted: attemptedProgression || Boolean(rhythm),
   };
 }

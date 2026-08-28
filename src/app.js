@@ -44,7 +44,7 @@ function saveLevel(id) {
 
 function init() {
   for (const id of ['gate', 'btn-start', 'levels', 'btn-play', 'btn-tonic', 'btn-click',
-    'btn-next', 'beatmap', 'key-label', 'sheet', 'review', 'session', 'replay-count']) {
+    'btn-next', 'beatmap', 'playbar', 'key-label', 'sheet', 'review', 'session', 'replay-count']) {
     el[id] = document.getElementById(id);
   }
 
@@ -56,6 +56,7 @@ function init() {
   el['btn-tonic'].addEventListener('click', playTonic);
   el['btn-next'].addEventListener('click', next);
   el['btn-click'].addEventListener('click', toggleClick);
+  player.onProgress = movePlayhead;
 
   document.addEventListener('keydown', onKey);
   render();
@@ -115,7 +116,11 @@ function next() {
   state.replays = 0;
   el.review.hidden = true;
   el.review.innerHTML = '';
-  sheet.reset({ length: state.exercise.chords.length, mode: state.exercise.key.mode });
+  sheet.reset({
+    mode: state.exercise.key.mode,
+    rhythmChoices: state.exercise.rhythmChoices,
+    beatsPerBar: state.exercise.meter.beats,
+  });
   render();
   play();
   sheet.focus();
@@ -152,6 +157,8 @@ function highlight(index, side = 'played') {
   if (state.phase === 'graded') highlightReview(el.review, index, side);
 }
 
+
+
 function submit(answer) {
   if (state.phase !== 'answering' || !answer.chords.length) return;
   player.stop();
@@ -162,6 +169,7 @@ function submit(answer) {
   state.session.scoreSum += result.score;
   if (result.perfect) state.session.perfect += 1;
   sheet.setEnabled(false);
+  if (state.exercise.rhythmChoices) sheet.markRhythm(state.exercise.rhythmPatternId);
   el.review.hidden = false;
   renderReview(el.review, result, state.exercise, state.answerPlay, {
     onPlayChord: (chord) => player.playChord(chord),
@@ -185,6 +193,45 @@ function playBoth() {
   render();
 }
 
+/**
+ * While answering, all the screen may show is how long the excerpt is: where
+ * the chords change, and how many there are, is the question. The playbar is a
+ * row of beats with a playhead, and gives none of that away.
+ */
+function renderPlaybar() {
+  const exercise = state.exercise;
+  el.playbar.innerHTML = '';
+  if (!exercise) return;
+  const beats = totalBeats(exercise);
+  el.playbar.style.setProperty('--beats', String(beats));
+  for (let b = 0; b < beats; b++) {
+    const tick = document.createElement('div');
+    tick.className = 'tick';
+    if (b % exercise.meter.beats === 0) tick.classList.add('is-downbeat');
+    el.playbar.append(tick);
+  }
+  const head = document.createElement('div');
+  head.className = 'playhead';
+  head.hidden = true;
+  el.playbar.append(head);
+}
+
+function totalBeats(exercise) {
+  return exercise.chords.reduce((max, c) => Math.max(max, c.startBeat + c.durationBeats), 0);
+}
+
+function movePlayhead(beat) {
+  const head = el.playbar.querySelector('.playhead');
+  if (!head || !state.exercise) return;
+  if (beat === null) {
+    head.hidden = true;
+    return;
+  }
+  head.hidden = false;
+  head.style.left = `${(beat / totalBeats(state.exercise)) * 100}%`;
+}
+
+/** After grading, the beatmap can show what the rhythm actually was. */
 function renderBeatmap() {
   const exercise = state.exercise;
   el.beatmap.innerHTML = '';
@@ -194,7 +241,8 @@ function renderBeatmap() {
     box.className = 'chord-box';
     box.style.flexGrow = String(chord.durationBeats);
     box.innerHTML = `<span class="chord-n">${i + 1}</span>
-      <span class="chord-value">?</span>`;
+      <span class="chord-value">${chord.roman}</span>
+      <span class="chord-beats">${chord.durationBeats === 1 ? '1 beat' : `${chord.durationBeats} beats`}</span>`;
     el.beatmap.append(box);
   });
 }
@@ -208,9 +256,8 @@ function render() {
   el['btn-play'].disabled = !exercise;
   el['btn-tonic'].disabled = !exercise;
   el['btn-next'].hidden = phase !== 'graded';
-  // Once graded, the comparison strip says everything the beatmap was saying,
-  // and says it against what the user wrote.
-  el.beatmap.hidden = phase === 'graded';
+  el.playbar.hidden = phase === 'graded';
+  el.beatmap.hidden = phase !== 'graded';
   el['btn-click'].classList.toggle('is-on', state.clickOn);
   el['btn-click'].setAttribute('aria-pressed', String(state.clickOn));
   el['replay-count'].textContent = state.replays > 1 ? `${state.replays} plays` : '';
@@ -220,6 +267,7 @@ function render() {
     ? `${count} exercise${count === 1 ? '' : 's'} · ${Math.round((scoreSum / count) * 100)}% average · ${perfect} clean`
     : '';
 
+  renderPlaybar();
   renderBeatmap();
 }
 

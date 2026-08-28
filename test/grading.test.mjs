@@ -106,3 +106,42 @@ test('grading a generated exercise against its own truth is always perfect', () 
     assert.ok(result.perfect, `${text} should grade clean`);
   }
 });
+
+const withRhythm = (romans, patternId, choices) => ({
+  ...exerciseOf(romans), rhythmPatternId: patternId, rhythmChoices: choices,
+});
+
+test('the rhythm question is worth a point when it was asked and answered', () => {
+  const exercise = withRhythm(['I', 'IV', 'V', 'I'], 'h-h-h-h', ['q-q-q-q', 'h-h-h-h']);
+  const answer = { chords: parseProgression('I IV V I').chords, rhythmPatternId: 'h-h-h-h' };
+  const result = gradeExercise(exercise, answer);
+  assert.equal(result.rhythm.correct, true);
+  assert.equal(result.possible, 9, 'eight chord points plus one for the rhythm');
+  assert.equal(result.score, 1);
+});
+
+test('the wrong rhythm costs its point and says what to do about it', () => {
+  const exercise = withRhythm(['I', 'IV', 'V', 'I'], 'h-h-h-h', ['q-q-q-q', 'h-h-h-h']);
+  const answer = { chords: parseProgression('I IV V I').chords, rhythmPatternId: 'q-q-q-q' };
+  const result = gradeExercise(exercise, answer);
+  assert.equal(result.rhythm.correct, false);
+  assert.equal(result.score, 8 / 9);
+  assert.equal(result.perfect, false);
+  assert.match(result.rhythm.reason, /click/);
+});
+
+test('a rhythm left unanswered is skipped, not marked wrong', () => {
+  const exercise = withRhythm(['I', 'IV', 'V', 'I'], 'h-h-h-h', ['q-q-q-q', 'h-h-h-h']);
+  const result = gradeExercise(exercise, { chords: parseProgression('I IV V I').chords });
+  assert.equal(result.rhythm, null);
+  assert.equal(result.possible, 8);
+  assert.ok(result.perfect, 'skipping an optional section cannot cost you');
+});
+
+test('answering only the rhythm still counts as an attempt', () => {
+  const exercise = withRhythm(['I', 'IV'], 'q-q-h', ['q-q-h', 'h-q-q']);
+  const result = gradeExercise(exercise, { chords: [], rhythmPatternId: 'q-q-h' });
+  assert.equal(result.attempted, true);
+  assert.equal(result.possible, 1);
+  assert.equal(result.score, 1);
+});

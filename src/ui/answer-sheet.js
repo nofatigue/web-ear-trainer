@@ -7,6 +7,7 @@
 
 import { parseProgression } from '../parse.js';
 import { DEGREE_QUALITIES, formatRoman } from '../theory.js';
+import { createRhythmPicker } from './rhythm-picker.js';
 
 function degreeOptions(mode) {
   return DEGREE_QUALITIES[mode].map((quality, degree) => formatRoman(degree, quality));
@@ -14,6 +15,7 @@ function degreeOptions(mode) {
 
 export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
   root.innerHTML = `
+    <div class="section" id="rhythm-section"></div>
     <label class="sheet-label" for="progression">Progression</label>
     <p class="sheet-hint">Type roman numerals — <code>I IV V I</code> — or use the pickers. Case
       carries the quality: <code>V</code> is major, <code>vi</code> is minor, <code>vii°</code> diminished.</p>
@@ -24,12 +26,15 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     <button class="btn btn-primary" id="btn-submit" type="button">Check answer <kbd>enter</kbd></button>
   `;
 
+  const rhythmRoot = root.querySelector('#rhythm-section');
+  const rhythm = createRhythmPicker(rhythmRoot, { onChange: () => update() });
   const input = root.querySelector('#progression');
   const slotsEl = root.querySelector('#slots');
   const errorsEl = root.querySelector('#sheet-errors');
   const submitEl = root.querySelector('#btn-submit');
 
-  let length = 4;
+  const MIN_SLOTS = 3;
+  const MAX_SLOTS = 8;
   let mode = 'major';
   let enabled = true;
 
@@ -41,9 +46,21 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     return parseProgression(input.value);
   }
 
+  /**
+   * How many pickers to show.
+   *
+   * Never the number of chords in the exercise: how many chords you heard is
+   * part of the question, and a fixed row of pickers would answer it for you.
+   * One spare slot past whatever has been written keeps adding easy.
+   */
+  function slotCount() {
+    return Math.min(MAX_SLOTS, Math.max(MIN_SLOTS, tokens().length + 1));
+  }
+
   function renderSlots() {
     const current = tokens();
     const options = degreeOptions(mode);
+    const length = slotCount();
     slotsEl.innerHTML = '';
     for (let i = 0; i < length; i++) {
       const wrap = document.createElement('div');
@@ -70,7 +87,7 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
       }
       select.addEventListener('change', () => {
         const next = tokens();
-        while (next.length < length) next.push('');
+        while (next.length <= i) next.push('');
         next[i] = select.value;
         input.value = next.join(' ').replace(/\s+/g, ' ').trim();
         update();
@@ -101,11 +118,12 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
 
   function getAnswer() {
     const { chords } = parsed();
-    return { chords, text: input.value.trim() };
+    return { chords, rhythmPatternId: rhythm.getValue(), text: input.value.trim() };
   }
 
   function setEnabled(value) {
     enabled = value;
+    rhythm.setEnabled(value);
     input.disabled = !value;
     submitEl.disabled = !value || parsed().chords.length === 0;
     // Once an answer is in, checking it again is meaningless — the next move
@@ -114,9 +132,9 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     renderSlots();
   }
 
-  function reset({ length: n = length, mode: m = mode } = {}) {
-    length = n;
+  function reset({ mode: m = mode, rhythmChoices = null, beatsPerBar = 4 } = {}) {
     mode = m;
+    rhythm.reset(rhythmChoices, { beatsPerBar });
     input.value = '';
     errorsEl.textContent = '';
     errorsEl.classList.remove('visible');
@@ -125,5 +143,11 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
   }
 
   update();
-  return { reset, setEnabled, getAnswer, focus: () => input.focus() };
+  return {
+    reset,
+    setEnabled,
+    getAnswer,
+    focus: () => input.focus(),
+    markRhythm: (correctId) => rhythm.markResult(correctId),
+  };
 }

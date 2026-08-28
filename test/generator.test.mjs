@@ -145,9 +145,10 @@ test('chords written past the end of the excerpt are added on as further beats',
   const exercise = generateExercise(levelSettings(1), { rng: seeded(11) }); // 3 chords
   const answer = Array.from({ length: 5 }, () => ({ degree: 0, quality: 'maj' }));
   const echo = exerciseFromAnswer(exercise, answer);
+  const end = exercise.chords.reduce((max, c) => Math.max(max, c.startBeat + c.durationBeats), 0);
   assert.equal(echo.chords.length, 5);
-  assert.equal(echo.chords[3].startBeat, 3);
-  assert.equal(echo.chords[4].startBeat, 4);
+  assert.equal(echo.chords[3].startBeat, end, 'the fourth follows the excerpt');
+  assert.equal(echo.chords[4].startBeat, end + 1);
 });
 
 test('an altered degree is voiced flat or sharp, not diatonic', async () => {
@@ -156,4 +157,31 @@ test('an altered degree is voiced flat or sharp, not diatonic', async () => {
   const diatonic = voiceChord(key, { degree: 6, quality: 'min' });
   const flattened = voiceChord(key, { degree: 6, quality: 'maj', alter: -1 });
   assert.equal(flattened.pitches[1], diatonic.pitches[1] - 1, 'bVII sits a semitone below vii');
+});
+
+test('a level that asks about rhythm always offers four same-length choices', () => {
+  const settings = levelSettings(3);
+  const rng = seeded(5150);
+  for (let i = 0; i < 100; i++) {
+    const exercise = generateExercise(settings, { rng });
+    assert.ok(exercise.rhythmChoices, 'level 3 asks');
+    assert.equal(exercise.rhythmChoices.length, 4);
+    assert.ok(exercise.rhythmChoices.includes(exercise.rhythmPatternId), 'the truth is among them');
+    const beats = exercise.rhythmChoices.map((id) => patternBeats(getPattern(id)));
+    assert.equal(new Set(beats).size, 1, 'all the same total length');
+    assert.equal(new Set(exercise.rhythmChoices).size, 4, 'no duplicates');
+  }
+});
+
+test('levels that do not ask about rhythm offer no choices', () => {
+  for (const id of [1, 2]) {
+    for (const exercise of sample(id, 20)) assert.equal(exercise.rhythmChoices, null);
+  }
+});
+
+test('chord durations follow the pattern that was chosen', () => {
+  for (const exercise of sample(3, 40)) {
+    const pattern = getPattern(exercise.rhythmPatternId);
+    assert.deepEqual(exercise.chords.map((c) => c.durationBeats), pattern.beats);
+  }
 });

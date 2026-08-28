@@ -8,7 +8,7 @@
 import {
   degreeQuality, degreeRootMidi, chordPitches, formatRoman, keyUsesFlats,
 } from './theory.js';
-import { patternsForLength, placements } from './rhythm.js';
+import { patternsForLength, askablePatterns, placements, rhythmChoices } from './rhythm.js';
 
 // Weighted successors per degree in major. Functional harmony, roughly:
 // tonic goes anywhere, subdominants push to the dominant, the dominant resolves.
@@ -40,19 +40,22 @@ export const LEVELS = [
     id: 1,
     name: 'Level 1',
     blurb: 'C major · I IV V',
-    settings: { keys: ['C'], mode: 'major', length: 3, pool: [0, 3, 4] },
+    settings: { keys: ['C'], mode: 'major', length: 3, pool: [0, 3, 4], rhythmTier: 1 },
   },
   {
     id: 2,
     name: 'Level 2',
     blurb: 'C major · adds ii and vi',
-    settings: { keys: ['C'], mode: 'major', length: 4, pool: [0, 1, 3, 4, 5] },
+    settings: { keys: ['C'], mode: 'major', length: 4, pool: [0, 1, 3, 4, 5], rhythmTier: 1 },
   },
   {
     id: 3,
     name: 'Level 3',
-    blurb: 'Any major key · all diatonic triads',
-    settings: { keys: MAJOR_KEYS, mode: 'major', length: 4, pool: [0, 1, 2, 3, 4, 5, 6] },
+    blurb: 'Any major key · all triads, and the rhythm',
+    settings: {
+      keys: MAJOR_KEYS, mode: 'major', length: 4, pool: [0, 1, 2, 3, 4, 5, 6],
+      rhythmTier: 2, askRhythm: true,
+    },
   },
 ];
 
@@ -64,6 +67,8 @@ export const DEFAULT_SETTINGS = {
   bpm: 84,
   meter: { beats: 4, unit: 4 },
   octave: 3,
+  rhythmTier: 1,   // how hard the rhythms may get, 1-3
+  askRhythm: false, // whether the answer sheet asks which rhythm it was
 };
 
 export function levelSettings(levelId) {
@@ -191,7 +196,11 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
   const key = { tonic: pick(rng, config.keys), mode: config.mode };
   const degrees = generateDegrees(rng, config);
 
-  const patterns = patternsForLength(degrees.length);
+  // When the rhythm is going to be asked about, only use patterns that have
+  // enough plausible siblings to make a real question of it.
+  const patterns = config.askRhythm
+    ? askablePatterns(degrees.length, config.rhythmTier)
+    : patternsForLength(degrees.length, config.rhythmTier);
   const pattern = patterns.length ? pick(rng, patterns) : null;
   const slots = pattern
     ? placements(pattern)
@@ -219,6 +228,9 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
     chords,
     melody: null,
     rhythmPatternId: pattern ? pattern.id : null,
+    rhythmChoices: pattern && config.askRhythm
+      ? rhythmChoices(pattern, { rng, maxTier: config.rhythmTier }).map((p) => p.id)
+      : null,
     concepts,
   };
 }

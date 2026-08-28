@@ -15,6 +15,9 @@ export class Player {
     this.scheduler = new Scheduler(engine);
     this.timeline = null;
     this.frame = null;
+    this.clock = null;
+    /** Set to follow playback in beats; called with null when it stops. */
+    this.onProgress = null;
   }
 
   get playing() {
@@ -24,6 +27,8 @@ export class Player {
   stop() {
     this.scheduler.stop();
     this.timeline = null;
+    this.clock = null;
+    if (this.onProgress) this.onProgress(null);
     if (this.frame !== null) cancelAnimationFrame(this.frame);
     this.frame = null;
   }
@@ -88,7 +93,11 @@ export class Player {
     }
 
     const music = this.layout(exercise, musicStart, { click });
-    this.run([...events, ...music.events], music.spans, music.endsAt, onChord, onDone);
+    this.run([...events, ...music.events], music.spans, music.endsAt, onChord, onDone, {
+      start: musicStart,
+      secondsPerBeat,
+      totalBeats: (music.endsAt - musicStart) / secondsPerBeat,
+    });
   }
 
   /**
@@ -111,13 +120,15 @@ export class Player {
     );
   }
 
-  run(events, spans, endsAt, onChord, onDone) {
+  run(events, spans, endsAt, onChord, onDone, clock = null) {
     this.timeline = spans;
-    if (onChord) this.track(spans, onChord);
+    this.clock = clock;
+    if (onChord || (clock && this.onProgress)) this.track(spans, onChord);
     this.scheduler.start(events, {
       endsAt,
       onDone: () => {
         if (onChord) onChord(null, null);
+        if (this.onProgress) this.onProgress(null);
         if (this.frame !== null) cancelAnimationFrame(this.frame);
         this.frame = null;
         if (onDone) onDone();
@@ -129,9 +140,13 @@ export class Player {
     let last = null;
     const step = () => {
       const now = this.engine.currentTime;
+      if (this.onProgress && this.clock) {
+        const beat = (now - this.clock.start) / this.clock.secondsPerBeat;
+        this.onProgress(Math.max(0, Math.min(this.clock.totalBeats, beat)));
+      }
       const active = spans.find((s) => now >= s.time && now < s.until) || null;
       const key = active ? `${active.side}:${active.index}` : null;
-      if (key !== last) {
+      if (onChord && key !== last) {
         last = key;
         onChord(active ? active.index : null, active ? active.side : null);
       }

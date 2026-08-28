@@ -82,6 +82,17 @@ export function renderReview(root, result, exercise, answerPlay, handlers = {}) 
   }
   root.append(strip);
 
+  if (result.rhythm) {
+    const row = document.createElement('div');
+    row.className = `review-rhythm is-${result.rhythm.correct ? 'correct' : 'wrong'}`;
+    row.innerHTML = `<span class="review-status">rhythm ${result.rhythm.correct ? 'correct' : 'wrong'}</span>
+      <span class="review-why"></span>`;
+    row.querySelector('.review-why').textContent = result.rhythm.correct
+      ? 'You had the pattern.'
+      : result.rhythm.reason;
+    root.append(row);
+  }
+
   const controls = document.createElement('div');
   controls.className = 'review-controls';
   const buttons = [
