@@ -10,6 +10,7 @@ import {
 } from './theory.js';
 import { patternsForLength, askablePatterns, placements, rhythmChoices } from './rhythm.js';
 import { voiceProgression } from './voicing.js';
+import { generateMelody } from './melody.js';
 
 // Weighted successors per degree in major. Functional harmony, roughly:
 // tonic goes anywhere, subdominants push to the dominant, the dominant resolves.
@@ -78,6 +79,16 @@ export const LEVELS = [
       asks: { rhythm: true, inversions: true, bass: true, top: true },
     },
   },
+  {
+    id: 6,
+    name: 'Level 6',
+    blurb: 'Everything, with a melody over the top',
+    settings: {
+      keys: MAJOR_KEYS, mode: 'major', length: [4, 6], pool: [0, 1, 2, 3, 4, 5, 6],
+      rhythmTier: 3, inversions: true, sevenths: 0.5, melody: true,
+      asks: { rhythm: true, inversions: true, bass: true, top: true, melody: true },
+    },
+  },
 ];
 
 export const DEFAULT_SETTINGS = {
@@ -91,6 +102,7 @@ export const DEFAULT_SETTINGS = {
   rhythmTier: 1,      // how hard the rhythms may get, 1-3
   inversions: false,  // may chords be voiced in inversion
   sevenths: 0,        // chance the dominant (or ii) is played as a seventh
+  melody: false,      // is a melody played over the progression
   asks: {},           // which sections the answer sheet puts to the user
 };
 
@@ -206,7 +218,7 @@ export function voiceChord(key, { degree, quality, alter = 0, inversion = 0 }, o
  * they were answering; anything written past the end of the excerpt is added on
  * as further beats, and a chord left blank simply stays silent.
  */
-export function exerciseFromAnswer(exercise, answerChords) {
+export function exerciseFromAnswer(exercise, answerChords, answerMelody = null) {
   let nextBeat = exercise.chords.reduce((max, c) => Math.max(max, c.startBeat + c.durationBeats), 0);
 
   const voiced = voiceProgression(
@@ -236,7 +248,25 @@ export function exerciseFromAnswer(exercise, answerChords) {
       ...placement,
     };
   });
-  return { ...exercise, id: `${exercise.id}_answer`, chords, concepts: [] };
+  // The melody as written, on the beats the real one used.
+  let melody = null;
+  if (exercise.melody && answerMelody && answerMelody.length) {
+    melody = answerMelody.map((note, i) => {
+      const slot = exercise.melody[i] || exercise.melody[exercise.melody.length - 1];
+      const reference = slot ? slot.midi : 72;
+      // Nearest octave to where the real melody sat, so the two are comparable.
+      let midi = reference - (reference % 12) + (note.pc ?? 0);
+      if (midi - reference > 6) midi -= 12;
+      if (reference - midi > 6) midi += 12;
+      return {
+        midi,
+        startBeat: slot ? slot.startBeat : 0,
+        durationBeats: slot ? slot.durationBeats : 1,
+      };
+    });
+  }
+
+  return { ...exercise, id: `${exercise.id}_answer`, chords, melody, concepts: [] };
 }
 
 /**
@@ -245,7 +275,11 @@ export function exerciseFromAnswer(exercise, answerChords) {
 export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.random } = {}) {
   const config = { ...DEFAULT_SETTINGS, ...settings };
   const key = { tonic: pick(rng, config.keys), mode: config.mode };
-  const degrees = generateDegrees(rng, config);
+  // A level may fix the number of chords or give a range to draw from.
+  const length = Array.isArray(config.length)
+    ? config.length[0] + Math.floor(rng() * (config.length[1] - config.length[0] + 1))
+    : config.length;
+  const degrees = generateDegrees(rng, { ...config, length });
 
   // When the rhythm is going to be asked about, only use patterns that have
   // enough plausible siblings to make a real question of it.
@@ -289,6 +323,7 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
   }));
 
   const asks = { ...NO_QUESTIONS, ...config.asks };
+  const melody = config.melody ? generateMelody({ key, chords }, { rng }) : null;
 
   const concepts = [];
   chords.forEach((chord, i) => {
@@ -305,7 +340,7 @@ export function generateExercise(settings = DEFAULT_SETTINGS, { rng = Math.rando
     meter: config.meter,
     bpm: config.bpm,
     chords,
-    melody: null,
+    melody,
     asks,
     rhythmPatternId: pattern ? pattern.id : null,
     rhythmChoices: pattern && asks.rhythm

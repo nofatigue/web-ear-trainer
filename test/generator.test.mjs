@@ -21,8 +21,12 @@ const sample = (levelId, n = 200) => {
 test('every level produces progressions of its stated length and pool', () => {
   for (const level of LEVELS) {
     const settings = levelSettings(level.id);
+    const [min, max] = Array.isArray(settings.length)
+      ? settings.length
+      : [settings.length, settings.length];
     for (const exercise of sample(level.id)) {
-      assert.equal(exercise.chords.length, settings.length, `level ${level.id} length`);
+      const n = exercise.chords.length;
+      assert.ok(n >= min && n <= max, `level ${level.id} produced ${n} chords, wanted ${min}-${max}`);
       for (const chord of exercise.chords) {
         assert.ok(settings.pool.includes(chord.degree), `level ${level.id} pool: ${chord.roman}`);
       }

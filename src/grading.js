@@ -10,6 +10,7 @@ import { formatRoman, chordLabel, pcToName, QUALITY_LABELS, ROMAN } from './theo
 const DEGREE_POINT = 1;
 const QUALITY_POINT = 1;
 const RHYTHM_POINT = 1;
+const MELODY_POINT = 1;
 // The voicing details are worth less than the chord itself: getting the bass
 // note of a chord you misheard entirely is not half an answer.
 const DETAIL_POINT = 0.5;
@@ -143,6 +144,71 @@ function gradeRhythm(exercise, answer) {
 }
 
 /**
+ * The melody, note against note by pitch class — how high someone sang it is
+ * not what is being tested.
+ */
+function gradeMelody(exercise, answer, flats) {
+  const asked = Boolean(exercise.asks && exercise.asks.melody && exercise.melody);
+  const given = (answer && answer.melody) || [];
+  if (!asked || !given.length) return null;
+
+  const expected = exercise.melody.map((note) => note.midi % 12);
+  const actual = given.map((note) => (note.pc ?? null));
+
+  const notes = [];
+  for (let i = 0; i < Math.max(expected.length, actual.length); i++) {
+    const want = expected[i];
+    const got = actual[i];
+    if (want === undefined) {
+      notes.push({ index: i, expected: null, actual: got, correct: false, earned: 0, possible: MELODY_POINT });
+    } else if (got === undefined || got === null) {
+      notes.push({ index: i, expected: want, actual: null, correct: false, earned: 0, possible: MELODY_POINT });
+    } else {
+      const correct = got === want;
+      notes.push({ index: i, expected: want, actual: got, correct, earned: correct ? MELODY_POINT : 0, possible: MELODY_POINT });
+    }
+  }
+
+  const reasons = [];
+  if (actual.length !== expected.length) {
+    reasons.push(`You wrote ${actual.length} notes; the melody had ${expected.length}.`);
+  }
+  const shift = displacement(expected, actual);
+  if (shift) {
+    const n = Math.abs(shift);
+    const note = n === 1 ? 'note' : 'notes';
+    reasons.push(
+      shift > 0
+        ? `You heard the line, but your answer starts ${n} ${note} into it.`
+        : `You heard the line, but your answer starts ${n} ${note} before it does.`,
+    );
+  }
+
+  return {
+    notes,
+    reasons,
+    expected,
+    earned: notes.reduce((sum, n) => sum + n.earned, 0),
+    possible: notes.reduce((sum, n) => sum + n.possible, 0),
+  };
+}
+
+/** Same notes, wrong place: returns how far the answer slipped, or 0. */
+function displacement(expected, actual) {
+  if (actual.length < 2) return 0;
+  for (let shift = -2; shift <= 2; shift++) {
+    if (shift === 0) continue;
+    let matched = 0;
+    for (let i = 0; i < actual.length; i++) {
+      const j = i + shift;
+      if (j >= 0 && j < expected.length && expected[j] === actual[i]) matched += 1;
+    }
+    if (matched >= Math.min(actual.length, expected.length) - 1 && matched >= 2) return shift;
+  }
+  return 0;
+}
+
+/**
  * Grade one attempt.
  *
  * Sections left blank are excluded from the denominator rather than counted
@@ -171,18 +237,24 @@ export function gradeExercise(exercise, answer) {
   if (transposed) notes.push(transposed);
 
   const rhythm = gradeRhythm(exercise, answer);
+  const melody = gradeMelody(exercise, answer, exercise.flats);
+  if (melody) notes.push(...melody.reasons);
 
-  const earned = slots.reduce((sum, s) => sum + s.earned, 0) + (rhythm ? rhythm.earned : 0);
-  const possible = slots.reduce((sum, s) => sum + s.possible, 0) + (rhythm ? rhythm.possible : 0);
+  const sections = [rhythm, melody].filter(Boolean);
+  const earned = slots.reduce((sum, s) => sum + s.earned, 0)
+    + sections.reduce((sum, s) => sum + s.earned, 0);
+  const possible = slots.reduce((sum, s) => sum + s.possible, 0)
+    + sections.reduce((sum, s) => sum + s.possible, 0);
 
   return {
     slots,
     rhythm,
+    melody,
     notes,
     earned,
     possible,
     score: possible ? earned / possible : 0,
     perfect: possible > 0 && earned === possible,
-    attempted: attemptedProgression || Boolean(rhythm),
+    attempted: attemptedProgression || sections.length > 0,
   };
 }

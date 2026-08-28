@@ -4,6 +4,8 @@
 // teaches more than a red mark you can only read, so every chip is playable and
 // the whole passage can be heard both ways in a row.
 
+import { pcToName } from '../theory.js';
+
 const STATUS_LABEL = {
   correct: 'correct',
   near: 'near miss',
@@ -81,6 +83,32 @@ export function renderReview(root, result, exercise, answerPlay, handlers = {}) 
     strip.append(line);
   }
   root.append(strip);
+
+  if (result.melody) {
+    const flats = Boolean(exercise.flats);
+    const strip2 = document.createElement('div');
+    strip2.className = 'strip';
+    strip2.style.setProperty('--slots', String(result.melody.notes.length));
+    for (const row of [{ key: 'played', label: 'Melody' }, { key: 'yours', label: 'You wrote' }]) {
+      const label = document.createElement('span');
+      label.className = 'strip-label';
+      label.textContent = row.label;
+      strip2.append(label);
+      const line = document.createElement('div');
+      line.className = 'strip-row';
+      line.dataset.side = `melody-${row.key}`;
+      for (const note of result.melody.notes) {
+        const pc = row.key === 'played' ? note.expected : note.actual;
+        const cell = chip(pc === null || pc === undefined ? '·' : pcToName(pc, { flats }), {
+          role: row.key,
+          status: row.key === 'played' ? '' : (note.correct ? 'correct' : 'wrong'),
+        });
+        line.append(cell);
+      }
+      strip2.append(line);
+    }
+    root.append(strip2);
+  }
 
   if (result.rhythm) {
     const row = document.createElement('div');

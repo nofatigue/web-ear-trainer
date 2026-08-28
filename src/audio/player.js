@@ -69,6 +69,17 @@ export class Player {
       }
     });
 
+    // The melody sits above the chords and a little louder: it is a line, not
+    // part of the texture.
+    for (const note of exercise.melody || []) {
+      const time = startTime + note.startBeat * secondsPerBeat;
+      const duration = note.durationBeats * secondsPerBeat * 0.92;
+      events.push({
+        time,
+        fire: (t) => engine.playNote({ midi: note.midi, time: t, duration, gain: 0.2 }),
+      });
+    }
+
     return { events, spans, endsAt: startTime + totalBeats * secondsPerBeat };
   }
 

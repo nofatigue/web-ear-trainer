@@ -8,6 +8,7 @@
 import { parseProgression, parsePitch } from '../parse.js';
 import { DEGREE_QUALITIES, formatRoman, chordLabel } from '../theory.js';
 import { createRhythmPicker } from './rhythm-picker.js';
+import { createMelodyInput } from './melody-input.js';
 
 function degreeOptions(mode) {
   return DEGREE_QUALITIES[mode].map((quality, degree) => formatRoman(degree, quality));
@@ -23,6 +24,7 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
            placeholder="I IV V I" aria-describedby="sheet-errors">
     <div class="slots" id="slots"></div>
     <div class="section" id="detail-section"></div>
+    <div class="section" id="melody-section"></div>
     <p class="sheet-errors" id="sheet-errors" role="status"></p>
     <button class="btn btn-primary" id="btn-submit" type="button">Check answer <kbd>enter</kbd></button>
   `;
@@ -32,6 +34,7 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
   const input = root.querySelector('#progression');
   const slotsEl = root.querySelector('#slots');
   const detailEl = root.querySelector('#detail-section');
+  const melody = createMelodyInput(root.querySelector('#melody-section'));
   const errorsEl = root.querySelector('#sheet-errors');
   const submitEl = root.querySelector('#btn-submit');
 
@@ -235,12 +238,18 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
         topPc: asks.top ? parsePitch(detail.top, key) : null,
       };
     });
-    return { chords: answered, rhythmPatternId: rhythm.getValue(), text: input.value.trim() };
+    return {
+      chords: answered,
+      rhythmPatternId: rhythm.getValue(),
+      melody: asks.melody ? melody.getNotes() : [],
+      text: input.value.trim(),
+    };
   }
 
   function setEnabled(value) {
     enabled = value;
     rhythm.setEnabled(value);
+    melody.setEnabled(value);
     input.disabled = !value;
     for (const field of detailEl.querySelectorAll('select, input')) field.disabled = !value;
     submitEl.disabled = !value || parsed().chords.length === 0;
@@ -258,6 +267,7 @@ export function createAnswerSheet(root, { onSubmit, onChange } = {}) {
     asks = a;
     details = [];
     rhythm.reset(rhythmChoices, { beatsPerBar });
+    melody.reset({ key: k, show: Boolean(a.melody) });
     input.value = '';
     errorsEl.textContent = '';
     errorsEl.classList.remove('visible');

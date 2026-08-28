@@ -74,10 +74,6 @@ function renderLevels() {
     button.addEventListener('click', () => setLevel(level.id));
     el.levels.append(button);
   }
-  const locked = document.createElement('p');
-  locked.className = 'level-locked';
-  locked.textContent = 'Level 6 — melody dictation — arrives with M5.';
-  el.levels.append(locked);
   syncLevels();
 }
 
@@ -165,7 +161,7 @@ function submit(answer) {
   player.stop();
   const result = gradeExercise(state.exercise, answer);
   state.phase = 'graded';
-  state.answerPlay = exerciseFromAnswer(state.exercise, answer.chords);
+  state.answerPlay = exerciseFromAnswer(state.exercise, answer.chords, answer.melody);
   state.session.count += 1;
   state.session.scoreSum += result.score;
   if (result.perfect) state.session.perfect += 1;

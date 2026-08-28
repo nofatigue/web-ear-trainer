@@ -105,18 +105,22 @@ export function parseProgression(input) {
 
 /**
  * Parse a melody line as scale degrees ("1 2 3 5") or note names ("C D E G").
- * Returns { notes, errors }; notes carry whichever of degree/pc was given.
+ *
+ * With a key, every note also carries the pitch class it resolves to, so the
+ * grader never has to care which way it was written.
  */
-export function parseMelody(input) {
+export function parseMelody(input, key = null) {
   const tokens = String(input).split(/[\s,|]+/).filter(Boolean);
   const notes = [];
   const errors = [];
   for (const token of tokens) {
     if (/^[1-7]$/.test(token)) {
-      notes.push({ degree: Number(token) - 1, text: token });
+      const degree = Number(token) - 1;
+      const pc = key ? (noteNameToPc(key.tonic) + SCALES[key.mode][degree]) % 12 : null;
+      notes.push({ degree, pc, text: token });
     } else {
       try {
-        notes.push({ pc: noteNameToPc(token), text: token });
+        notes.push({ degree: null, pc: noteNameToPc(token), text: token });
       } catch {
         errors.push(`"${token}" is neither a scale degree 1-7 nor a note name`);
       }
